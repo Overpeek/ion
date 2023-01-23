@@ -36,6 +36,35 @@ struct Variant {
     fields: Fields<Field>,
 }
 
+/* #[proc_macro_derive(ToOwned)]
+pub fn derive_to_owned(input: TokenStream) -> TokenStream {
+    _to_owned(&parse_macro_input!(input as DeriveInput)).unwrap_or_else(|err| err)
+}
+
+fn _to_owned(input: &DeriveInput) -> Result<TokenStream, TokenStream> {
+    let input = DebugTreeOpts::from_derive_input(input).map_err(|err| err.write_errors())?;
+
+    let ident = input.ident;
+    let (imp, typ, wher) = input.generics.split_for_impl();
+
+    Ok(if input.data.is_enum() {
+        todo!()
+    } else {
+        quote! {
+            impl #imp std::borrow::ToOwned for #ident #typ #wher {
+                type Owned = #ident <'static>;
+
+                fn to_owned(&self) -> Self::Owned {
+                    Self::Owned {
+
+                    }
+                }
+            }
+        }
+    }
+    .into())
+} */
+
 #[proc_macro_derive(DebugTree)]
 pub fn derive_debug_tree(input: TokenStream) -> TokenStream {
     _debug_tree(&parse_macro_input!(input as DeriveInput)).unwrap_or_else(|err| err)
@@ -50,6 +79,8 @@ fn _debug_tree(input: &DeriveInput) -> Result<TokenStream, TokenStream> {
 
     let (fields, nodes, extra) = if input.data.is_enum() {
         let e = input.data.take_enum().unwrap();
+
+        let name = format!("{ident}: ");
 
         let variant = e.iter().fold(TokenStream2::new(), |mut acc, v| {
             let i = &v.ident;
@@ -79,7 +110,9 @@ fn _debug_tree(input: &DeriveInput) -> Result<TokenStream, TokenStream> {
                 }
             },
             TokenStream2::new(),
-            TokenStream2::new(),
+            quote! {
+                write!(f, #name)?;
+            },
         )
     } else {
         // let (fields, nodes) = input
