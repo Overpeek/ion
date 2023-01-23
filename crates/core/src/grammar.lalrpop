@@ -1,0 +1,50 @@
+use std::borrow::Cow;
+use crate::ast::*;
+
+grammar;
+
+pub Module: Module<'input> = {
+    Statements => Module::from(<>),
+};
+
+pub Statements: Statements<'input> = {
+    <s: (<Statement> ";")*> => Statements(s),
+};
+
+pub Statement: Statement<'input> = {
+    Expression => Statement::Expression(<>),
+    <i:Ident> "=" <e:Expression> => Statement::Assignment(Assignment::new(i, e)),
+    "global" <i:Ident> "=" <e:Expression> => Statement::Assignment(Assignment::new_global(i, e)),
+};
+
+pub Expression: Expression<'input> = {
+    "function(" <p:Parameters> ")" <b:Block> => {
+        Expression::NamelessFunction(
+            Function::new()
+                .with_params(p)
+                .with_random_name()
+                .with_block(b)
+        )
+    },
+    <i:Ident> "(" <p:Parameters> ")" => Expression::FunctionCall(FunctionCall::new(i, p)),
+};
+
+pub Block: Block<'input> = {
+    "{" <s: Statements> "}" => Block(s),
+};
+
+pub Parameters = Comma<Ident>;
+
+Comma<T>: Vec<T> = {
+    <mut v: (<T> ",")*> <e:T?> => match e {
+        Some(e) => {
+            v.push(e);
+            v
+        },
+        None => v,
+    }
+};
+
+pub Ident: Ident<'input> = {
+    r"[a-zA-Z][\w_]*" => Cow::Borrowed(<>),
+};

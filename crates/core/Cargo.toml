@@ -1,0 +1,17 @@
+[package]
+name = "ion-core"
+version.workspace = true
+edition.workspace = true
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+# parser
+lalrpop-util = "0.19.8"
+regex = "1.7"
+# macros
+ion-macros = { path = "../macros" }
+
+[build-dependencies]
+# parser generator
+lalrpop = "0.19.8"
