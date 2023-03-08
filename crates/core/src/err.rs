@@ -174,6 +174,7 @@ impl fmt::Display for IonPretty<'_, &IonParseError> {
                 let (line, pad) = line_and_mag(input, *row);
                 let col0 = col;
                 let (row, col) = (row + 1, col + 1);
+                let row_ = row;
 
                 col! {
                     color;
@@ -181,7 +182,7 @@ impl fmt::Display for IonPretty<'_, &IonParseError> {
                 };
 
                 writeln!(f, "{error}: Invalid token")?;
-                writeln!(f, "{pad}{arrow} {file}:{row}:{col}")?;
+                writeln!(f, "{pad}{arrow} {file}:{row_}:{col}")?;
                 writeln!(f, "{pad} {bar}")?;
                 writeln!(f, "{row} {bar} {line}")?;
                 writeln!(f, "{pad} {bar} {:col0$}{hat}", "")?
@@ -192,6 +193,12 @@ impl fmt::Display for IonPretty<'_, &IonParseError> {
                 let (line, pad) = line_and_mag(input, *row);
                 let col0 = col;
                 let (row, col) = (row + 1, col + 1);
+                let row_ = row;
+
+                col! {
+                    color;
+                    let row: blue = row;
+                };
 
                 writeln!(
                     f,
@@ -205,7 +212,7 @@ impl fmt::Display for IonPretty<'_, &IonParseError> {
                         last_sep: " or ",
                     }
                 )?;
-                writeln!(f, "{pad}{arrow} {file}:{row}:{col}")?;
+                writeln!(f, "{pad}{arrow} {file}:{row_}:{col}")?;
                 writeln!(f, "{pad} {bar}")?;
                 writeln!(f, "{row} {bar} {line}")?;
                 writeln!(f, "{pad} {bar} {:col0$}{hat}", "")?
@@ -219,6 +226,12 @@ impl fmt::Display for IonPretty<'_, &IonParseError> {
                 let (line, pad) = line_and_mag(input, rows.start);
                 let col0 = cols.start;
                 let (row, col) = (rows.start + 1, cols.start + 1);
+                let row_ = row;
+
+                col! {
+                    color;
+                    let row: blue = row;
+                };
 
                 writeln!(
                     f,
@@ -232,7 +245,7 @@ impl fmt::Display for IonPretty<'_, &IonParseError> {
                         last_sep: " or ",
                     }
                 )?;
-                writeln!(f, "{pad}{arrow} {file}:{row}:{col}")?;
+                writeln!(f, "{pad}{arrow} {file}:{row_}:{col}")?;
                 writeln!(f, "{pad} {bar}")?;
                 writeln!(f, "{row} {bar} {line}")?;
 
@@ -243,6 +256,12 @@ impl fmt::Display for IonPretty<'_, &IonParseError> {
 
                     let (line, pad) = line_and_mag(input, rows.end);
                     let row = rows.end + 1;
+
+                    col! {
+                        color;
+                        let row: blue = row;
+                    };
+
                     writeln!(f, "{pad} {bar}")?;
                     writeln!(f, "{row} {bar} {line}")?;
                     writeln!(f, "{pad} {bar} {:^>w2$}", "")?;
@@ -255,9 +274,15 @@ impl fmt::Display for IonPretty<'_, &IonParseError> {
                 let (line, pad) = line_and_mag(input, rows.start);
                 let col0 = cols.start;
                 let (row, col) = (rows.start + 1, cols.start + 1);
+                let row_ = row;
+
+                col! {
+                    color;
+                    let row: blue = row;
+                };
 
                 writeln!(f, "{error}: Extra token")?;
-                writeln!(f, "{pad}{arrow} {file}:{row}:{col}")?;
+                writeln!(f, "{pad}{arrow} {file}:{row_}:{col}")?;
                 writeln!(f, "{pad} {bar}")?;
                 writeln!(f, "{row} {bar} {line}")?;
 
@@ -268,6 +293,12 @@ impl fmt::Display for IonPretty<'_, &IonParseError> {
 
                     let (line, pad) = line_and_mag(input, rows.end);
                     let row = rows.end + 1;
+
+                    col! {
+                        color;
+                        let row: blue = row;
+                    };
+
                     writeln!(f, "{pad} {bar}")?;
                     writeln!(f, "{row} {bar} {line}",)?;
                     writeln!(f, "{pad} {bar} {:^>w2$}", "")?;

@@ -9,23 +9,22 @@ fn main() {
     let src = r#"
 c = 0;
 f = fn(a, b) {
-    c = a + b;"44444444
-        4444"
-"#; /* };
+    c = a + b;
+};
 
-    f\("ttttttttttttt
+f\("ttttttttttttt
               tttttttt", 4334);
-    "#; */
+    "#;
 
     let module = ion.parse_str(src).unwrap_or_else(|err| {
-        err.pretty_print(true, src, "<src>");
+        eprintln!("{}", err.pretty_print(true, src, "<src>"));
         exit(0)
     });
 
     println!("{}", ion.to_yaml(&module));
 
     ion.compile_ast(&module).unwrap_or_else(|err| {
-        err.pretty_print(true, src, "<src>");
+        eprintln!("{}", err.pretty_print(true, src, "<src>"));
         exit(0)
     });
 
