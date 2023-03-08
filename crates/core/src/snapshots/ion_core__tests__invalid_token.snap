@@ -1,0 +1,10 @@
+---
+source: crates/core/src/lib.rs
+expression: "err.pretty_print(false, code, \"<code>\")"
+---
+error: Invalid token
+ --> <code>:1:5
+  |
+1 | x = \
+  |     ^
+

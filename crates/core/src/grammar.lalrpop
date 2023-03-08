@@ -20,13 +20,37 @@ Stmts: Stmts<'input> = {
 };
 
 pub Stmt: Stmt<'input> = {
-    Expr => Stmt::Expr(<>),
+    // Expr => Stmt::Expr(<>),
+
+    // Function call
+    <i:Ident> <t:Tuple> => Stmt::FuncCall(FuncCall::new(i, t)),
+
+    // Named function
+    <e:StmtFn> => Stmt::Assign(Assign::new(e.0, e.1)),
+
+    // Named global function
+    "global" <e:StmtFn> => Stmt::Assign(Assign::new_global(e.0, e.1)),
+
+    // Assignment
     <i:Ident> "=" <e:Expr> => Stmt::Assign(Assign::new(i, e)),
+
+    // Global assignment
     "global" <i:Ident> "=" <e:Expr> => Stmt::Assign(Assign::new_global(i, e)),
 };
 
+StmtFn: (Ident<'input>, Expr<'input>) = {
+    "fn" <i:Ident> "(" <p:Parameters> ")" <b:Block> => {
+        (i, Expr::NamelessFunc(
+            Func::new()
+                .with_params(p)
+                .with_random_name()
+                .with_block(b)
+        ))
+    }
+};
+
 Expr: Expr<'input> = {
-    // Function declaration
+    // Nameless function declaration
     "fn(" <p:Parameters> ")" <b:Block> => {
         Expr::NamelessFunc(
             Func::new()

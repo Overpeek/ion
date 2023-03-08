@@ -1,11 +1,20 @@
-use ast::Module;
+use self::{
+    ast::Module,
+    err::{IonError, IonResult},
+    llvm::Compiler,
+};
+use crate::err::IonParseError;
 use lalrpop_util::{lalrpop_mod, ParseError};
+use serde::Serialize;
 use std::{borrow::Cow, fmt};
 
 //
 
 lalrpop_mod!(pub grammar);
 pub mod ast;
+pub mod err;
+pub mod llvm;
+mod util;
 
 //
 
@@ -14,6 +23,8 @@ pub struct Ion {
     parser: grammar::ModuleParser,
 }
 
+//
+
 impl Ion {
     pub fn new() -> Self {
         Self {
@@ -21,63 +32,82 @@ impl Ion {
         }
     }
 
-    pub fn parse_str<'input>(&'input self, s: &'input str) -> Module<'input> {
-        let mut errors = vec![];
-
-        self.parser.parse(&mut errors, s).unwrap_or_else(|err| {
-            match err {
-                ParseError::InvalidToken { location } => {
-                    let (line, row, col) = Self::spot_from_location(location, s)
-                        .expect("Input doesn't contain the error line");
-
-                    println!(
-                        "Invalid token at <input>:{row}:{col} :\n{line}\n{:col$}^",
-                        ""
-                    );
-                }
-                ParseError::UnrecognizedEOF { location, expected } => todo!(),
-                ParseError::UnrecognizedToken { token, expected } => {
-                    let (line1, row1, col1) = Self::spot_from_location(token.0, s)
-                        .expect("Input doesn't contain the error line");
-                    let (line2, row2, col2) = Self::spot_from_location(token.2, s)
-                        .expect("Input doesn't contain the error line");
-
-                    if row1 == row2 {
-                        let w = col2 - col1;
-                        println!(
-                            "Unrecognized token '{}' at <input>:{row1}{col1} :\n{line1}\n{:col1$}{:^>w$}",
-                            token.1,
-                            "", ""
-                        )
-                    }
-                    else {
-                        let w1 = line1.len() - col1;
-                        let w2 = col2 + 1;
-                        println!(
-                            "Unrecognized token at <input>:{row1}{col1} :\n{line1}\n{:col1$}{:^>w1$}",
-                            "", ""
-                        );
-                        println!(
-                            "  ...\n{line2}\n{:^>w2$}",
-                            ""
-                        );
-                    }
-                }
-                ParseError::ExtraToken { token } => todo!(),
-                ParseError::User { error } => todo!(),
-            }
-
-            panic!();
-        })
+    pub fn parse_str<'i>(&self, input: &'i str) -> IonResult<Module<'i>> {
+        self.parse_str_inner(input, "<input>")
     }
 
-    fn spot_from_location(location: usize, input: &str) -> Option<(&str, usize, usize)> {
-        let mut char_counter = 0;
-        input.lines().enumerate().find_map(|(row, line)| {
-            let col = char_counter..char_counter + line.len() + 1;
-            char_counter += col.end;
-            (col.end >= location).then_some((line, row, location - col.start))
-        })
+    pub fn compile_str<'i>(&self, s: &'i str) -> IonResult<()> {
+        let ast = self.parse_str(s)?;
+        self.compile_ast(&ast)?;
+        Ok(())
+    }
+
+    pub fn compile_ast(&self, ast: &Module) -> IonResult<()> {
+        Compiler::compile_ast(ast, None);
+        Ok(())
+    }
+
+    pub fn to_yaml(&self, ast: &impl Serialize) -> String {
+        serde_yaml::to_string(&ast).unwrap()
+    }
+
+    fn parse_str_inner<'i>(&self, s: &'i str, src: &'i str) -> IonResult<Module<'i>> {
+        let mut errors = vec![];
+
+        let res = self.parser.parse(&mut errors, s);
+
+        let err = match res {
+            Ok(module) => return Ok(module),
+            Err(err) => err,
+        };
+
+        let err = match err {
+            ParseError::InvalidToken { location } => {
+                let (_, row, col) = err::spot_from_location(location, s)
+                    .expect("Input doesn't contain the error line");
+
+                IonParseError::InvalidToken { location, row, col }
+            }
+            ParseError::UnrecognizedEOF { location, expected } => {
+                let (_, row, col) = err::spot_from_location(location, s)
+                    .expect("Input doesn't contain the error line");
+
+                IonParseError::UnexpectedEOF {
+                    location,
+                    row,
+                    col,
+                    expected,
+                }
+            }
+            ParseError::UnrecognizedToken { token, expected } => {
+                let (_, from_row, from_col) = err::spot_from_location(token.0, s)
+                    .expect("Input doesn't contain the error line");
+                let (_, to_row, to_col) = err::spot_from_location(token.2, s)
+                    .expect("Input doesn't contain the error line");
+
+                IonParseError::UnexpectedToken {
+                    token: token.0..token.2,
+                    rows: from_row..to_row,
+                    cols: from_col..to_col,
+                    expected,
+                }
+            }
+            ParseError::ExtraToken { token } => {
+                let (_, from_row, from_col) = err::spot_from_location(token.0, s)
+                    .expect("Input doesn't contain the error line");
+                let (_, to_row, to_col) = err::spot_from_location(token.2, s)
+                    .expect("Input doesn't contain the error line");
+
+                IonParseError::ExtraToken {
+                    token: token.0..token.2,
+                    rows: from_row..to_row,
+                    cols: from_col..to_col,
+                }
+            }
+            ParseError::User { error } => IonParseError::Other { msg: error },
+        };
+
+        Err(IonError::Parse(err))
     }
 }
 
@@ -87,61 +117,64 @@ impl Default for Ion {
     }
 }
 
-pub trait DebugTree: fmt::Debug {
-    fn debug_tree(&self) -> DebugTreeStruct<Self> {
-        DebugTreeStruct(self)
+//
+
+#[cfg(test)]
+mod tests {
+    use std::process::exit;
+
+    use crate::Ion;
+
+    #[test]
+    fn invalid_token() {
+        let code = r#"x = \"#;
+        let ion = Ion::new();
+        let err = ion.parse_str(code).unwrap_err();
+
+        insta::assert_display_snapshot!(err.pretty_print(false, code, "<code>"));
     }
 
-    #[allow(unused_variables)]
-    fn fmt(&self, f: &mut fmt::Formatter, depth: u8) -> fmt::Result {
-        writeln!(f, "{self:?}")
+    #[test]
+    fn unexpected_eof() {
+        let code = r#"x ="#;
+        let ion = Ion::new();
+        let err = ion.parse_str(code).unwrap_err();
+
+        insta::assert_display_snapshot!(err.pretty_print(false, code, "<code>"));
     }
-}
 
-impl DebugTree for bool {}
-impl DebugTree for u8 {}
-impl DebugTree for u16 {}
-impl DebugTree for u32 {}
-impl DebugTree for u64 {}
-impl DebugTree for usize {}
-impl DebugTree for i8 {}
-impl DebugTree for i16 {}
-impl DebugTree for i32 {}
-impl DebugTree for i64 {}
-impl DebugTree for isize {}
-impl DebugTree for f32 {}
-impl DebugTree for f64 {}
-impl DebugTree for str {}
-impl DebugTree for &str {}
-impl<T> DebugTree for Cow<'_, T>
-where
-    T: DebugTree + ToOwned + ?Sized,
-    <T as ToOwned>::Owned: fmt::Debug,
-{
-}
-impl<T: DebugTree> DebugTree for Vec<T> {
-    fn fmt(&self, f: &mut fmt::Formatter, depth: u8) -> fmt::Result {
-        let d = depth as usize * 2;
-        writeln!(f)?;
-        for i in self.iter() {
-            write!(f, "  {:d$}", "")?;
-            DebugTree::fmt(i, f, depth + 1)?;
-        }
+    #[test]
+    fn unexpected_token_1() {
+        let code = r#"x = ="#;
+        let ion = Ion::new();
+        let err = ion.parse_str(code).unwrap_err();
 
-        Ok(())
+        insta::assert_display_snapshot!(err.pretty_print(false, code, "<code>"));
     }
-}
 
-pub struct DebugTreeStruct<'a, T: DebugTree + ?Sized>(&'a T);
+    #[test]
+    fn unexpected_token_2() {
+        let code = r#""
 
-impl<T: DebugTree> fmt::Display for DebugTreeStruct<'_, T> {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        DebugTree::fmt(self.0, f, 0)
+
+            ""#;
+        let ion = Ion::new();
+        let err = ion.parse_str(code).unwrap_err();
+
+        insta::assert_display_snapshot!(err.pretty_print(false, code, "<code>"));
     }
-}
 
-impl<T: DebugTree> fmt::Debug for DebugTreeStruct<'_, T> {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        DebugTree::fmt(self.0, f, 0)
+    #[test]
+    fn correct_code() {
+        let code = r#"
+            x = 4;
+            fn y() { x = 2; };
+            y();"#;
+
+        let ion = Ion::new();
+        ion.parse_str(code).unwrap_or_else(|err| {
+            eprintln!("{}", err.pretty_print(true, code, "<code>"));
+            exit(-1);
+        });
     }
 }

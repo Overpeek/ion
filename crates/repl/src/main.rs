@@ -1,25 +1,33 @@
-use ion_core::{
-    ast::{Interpret, Module},
-    DebugTree, Ion,
-};
-use std::{collections::HashMap, io::stdout};
+use ion_core::Ion;
+use std::process::exit;
 
 //
 
 fn main() {
     let ion = Ion::new();
 
-    let module = ion.parse_str(
-        r#"
+    let src = r#"
 c = 0;
 f = fn(a, b) {
-    c = a + b;
-};
+    c = a + b;"44444444
+        4444"
+"#; /* };
 
-f("ttttttttttttt
-          tttttttt", 4334);
-"#,
-    );
+    f\("ttttttttttttt
+              tttttttt", 4334);
+    "#; */
+
+    let module = ion.parse_str(src).unwrap_or_else(|err| {
+        err.pretty_print(true, src, "<src>");
+        exit(0)
+    });
+
+    println!("{}", ion.to_yaml(&module));
+
+    ion.compile_ast(&module).unwrap_or_else(|err| {
+        err.pretty_print(true, src, "<src>");
+        exit(0)
+    });
 
     /*
     f = function() {
@@ -36,12 +44,6 @@ f("ttttttttttttt
 
     x = 4;
          * */
-
-    println!("{:#?}", module.debug_tree());
-
-    let mut local = vec![HashMap::new()];
-    println!("{:#?}", module.eval(&mut local));
-    println!("{:#?}", local);
 
     // Module
     //   Assignment
