@@ -32,11 +32,11 @@ impl Ion {
     }
 
     pub fn parse_str<'i>(&self, input: &'i str) -> IonResult<Module<'i>> {
-        self.parse_str_inner(input, "<input>")
+        self.parse_str_inner(input)
     }
 
-    pub fn compile_str<'i>(&self, s: &'i str) -> IonResult<()> {
-        let ast = self.parse_str(s)?;
+    pub fn compile_str(&self, input: &str) -> IonResult<()> {
+        let ast = self.parse_str(input)?;
         self.compile_ast(&ast)?;
         Ok(())
     }
@@ -50,10 +50,10 @@ impl Ion {
         serde_yaml::to_string(&ast).unwrap()
     }
 
-    fn parse_str_inner<'i>(&self, s: &'i str, src: &'i str) -> IonResult<Module<'i>> {
+    fn parse_str_inner<'i>(&self, input: &'i str) -> IonResult<Module<'i>> {
         let mut errors = vec![];
 
-        let res = self.parser.parse(&mut errors, s);
+        let res = self.parser.parse(&mut errors, input);
 
         let err = match res {
             Ok(module) => return Ok(module),
@@ -62,13 +62,13 @@ impl Ion {
 
         let err = match err {
             ParseError::InvalidToken { location } => {
-                let (_, row, col) = err::spot_from_location(location, s)
+                let (_, row, col) = err::spot_from_location(location, input)
                     .expect("Input doesn't contain the error line");
 
                 IonParseError::InvalidToken { location, row, col }
             }
             ParseError::UnrecognizedEOF { location, expected } => {
-                let (_, row, col) = err::spot_from_location(location, s)
+                let (_, row, col) = err::spot_from_location(location, input)
                     .expect("Input doesn't contain the error line");
 
                 IonParseError::UnexpectedEOF {
@@ -79,9 +79,9 @@ impl Ion {
                 }
             }
             ParseError::UnrecognizedToken { token, expected } => {
-                let (_, from_row, from_col) = err::spot_from_location(token.0, s)
+                let (_, from_row, from_col) = err::spot_from_location(token.0, input)
                     .expect("Input doesn't contain the error line");
-                let (_, to_row, to_col) = err::spot_from_location(token.2, s)
+                let (_, to_row, to_col) = err::spot_from_location(token.2, input)
                     .expect("Input doesn't contain the error line");
 
                 IonParseError::UnexpectedToken {
@@ -92,9 +92,9 @@ impl Ion {
                 }
             }
             ParseError::ExtraToken { token } => {
-                let (_, from_row, from_col) = err::spot_from_location(token.0, s)
+                let (_, from_row, from_col) = err::spot_from_location(token.0, input)
                     .expect("Input doesn't contain the error line");
-                let (_, to_row, to_col) = err::spot_from_location(token.2, s)
+                let (_, to_row, to_col) = err::spot_from_location(token.2, input)
                     .expect("Input doesn't contain the error line");
 
                 IonParseError::ExtraToken {

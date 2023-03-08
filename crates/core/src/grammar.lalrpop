@@ -1,4 +1,4 @@
-use std::{str::FromStr, borrow::Cow};
+use std::borrow::Cow;
 use crate::ast::*;
 
 //
@@ -22,8 +22,8 @@ Stmts: Stmts<'input> = {
 pub Stmt: Stmt<'input> = {
     // Expr => Stmt::Expr(<>),
 
-    // Function call
-    <i:Ident> <t:Tuple> => Stmt::FuncCall(FuncCall::new(i, t)),
+    // Fntion call
+    <i:Ident> <t:Tuple> => Stmt::FnCall(FnCall::new(i, t)),
 
     // Named function
     <e:StmtFn> => Stmt::Assign(Assign::new(e.0, e.1)),
@@ -36,12 +36,15 @@ pub Stmt: Stmt<'input> = {
 
     // Global assignment
     "global" <i:Ident> "=" <e:Expr> => Stmt::Assign(Assign::new_global(i, e)),
+
+    // return
+    "return" <e:Expr?> => Stmt::new_return(e),
 };
 
 StmtFn: (Ident<'input>, Expr<'input>) = {
     "fn" <i:Ident> "(" <p:Parameters> ")" <b:Block> => {
-        (i, Expr::NamelessFunc(
-            Func::new()
+        (i, Expr::NamelessFn(
+            Fn::new()
                 .with_params(p)
                 .with_random_name()
                 .with_block(b)
@@ -52,16 +55,16 @@ StmtFn: (Ident<'input>, Expr<'input>) = {
 Expr: Expr<'input> = {
     // Nameless function declaration
     "fn(" <p:Parameters> ")" <b:Block> => {
-        Expr::NamelessFunc(
-            Func::new()
+        Expr::NamelessFn(
+            Fn::new()
                 .with_params(p)
                 .with_random_name()
                 .with_block(b)
         )
     },
 
-    // Function call
-    <i:Ident> <t:Tuple> => Expr::FuncCall(FuncCall::new(i, t)),
+    // Fntion call
+    <i:Ident> <t:Tuple> => Expr::FnCall(FnCall::new(i, t)),
 
     // Binary expressions
     BinExpr => <>,

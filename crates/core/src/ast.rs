@@ -71,7 +71,7 @@ pub enum Stmt<'i> {
     /// ```text
     /// a(params)
     /// ```
-    FuncCall(FuncCall<'i>),
+    FnCall(FnCall<'i>),
 
     /// A named function
     ///
@@ -84,7 +84,21 @@ pub enum Stmt<'i> {
     /// ```text
     /// a = fn(params) {}
     /// ```
-    Func(Func<'i>),
+    Fn(Fn<'i>),
+
+    /// A return from the function
+    ///
+    /// ```text
+    /// return 4 + 4;
+    /// ```
+    Return(Return<'i>),
+
+    /// A void return from the function
+    ///
+    /// ```text
+    /// return;
+    /// ```
+    ReturnVoid(ReturnVoid),
 
     /// A conditional branch
     ///
@@ -112,6 +126,16 @@ pub enum Stmt<'i> {
     /// }
     /// ```
     Loop(),
+}
+
+impl<'i> Stmt<'i> {
+    pub fn new_return(e: Option<Expr<'i>>) -> Self {
+        if let Some(e) = e {
+            Self::Return(Return { value: e })
+        } else {
+            Self::ReturnVoid(ReturnVoid)
+        }
+    }
 }
 
 /// An assignment of an [`Expression`] to a name
@@ -156,13 +180,13 @@ impl<'i> Assign<'i> {
 ///
 /// TODO: extern functions (bodyless)
 #[derive(Debug, Clone, Serialize)]
-pub struct Func<'i> {
+pub struct Fn<'i> {
     pub name: Ident<'i>,
     pub params: Vec<Ident<'i>>,
     pub block: Block<'i>,
 }
 
-impl<'i> Func<'i> {
+impl<'i> Fn<'i> {
     pub fn new() -> Self {
         Self::default()
     }
@@ -197,7 +221,7 @@ impl<'i> Func<'i> {
     }
 }
 
-impl<'i> Default for Func<'i> {
+impl<'i> Default for Fn<'i> {
     fn default() -> Self {
         Self {
             name: Ident::Borrowed("incomplete function"),
@@ -206,6 +230,14 @@ impl<'i> Default for Func<'i> {
         }
     }
 }
+
+#[derive(Debug, Clone, Serialize)]
+pub struct Return<'i> {
+    pub value: Expr<'i>,
+}
+
+#[derive(Debug, Clone, Default, Serialize)]
+pub struct ReturnVoid;
 
 /// A group of statements surrounded by `{` and `}`
 #[derive(Debug, Clone, Default, Serialize)]
@@ -218,14 +250,14 @@ pub enum Expr<'i> {
     /// ```text
     /// function(params) {}
     /// ```
-    NamelessFunc(Func<'i>),
+    NamelessFn(Fn<'i>),
 
     /// A function call
     ///
     /// ```text
     /// a(params)
     /// ```
-    FuncCall(FuncCall<'i>),
+    FnCall(FnCall<'i>),
 
     /// # A unary (prefix) operation
     ///
@@ -293,7 +325,11 @@ pub enum Expr<'i> {
     /// ```
     Literal(Literal<'i>),
 
-    /// A path to read from
+    /// A path to read data from
+    ///
+    /// ´´´text
+    /// c
+    /// ´´´
     ///
     /// ´´´text
     /// a.b.c
@@ -325,18 +361,18 @@ pub enum BinOp {
 }
 
 #[derive(Debug, Clone, Serialize)]
-pub struct FuncCall<'i> {
+pub struct FnCall<'i> {
     pub name: Ident<'i>,
     pub args: Vec<Expr<'i>>,
 }
 
-impl<'i> FuncCall<'i> {
+impl<'i> FnCall<'i> {
     pub fn new(name: Ident<'i>, args: Vec<Expr<'i>>) -> Self {
         Self { name, args }
     }
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Copy, Serialize)]
 #[serde(untagged)]
 pub enum Literal<'i> {
     Int(usize),
@@ -365,6 +401,7 @@ impl<'i> Literal<'i> {
     }
 }
 
+/// Data accessor
 #[derive(Debug, Clone, Serialize)]
 pub struct Path<'i> {
     pub parts: Vec<Ident<'i>>,

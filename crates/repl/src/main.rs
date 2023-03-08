@@ -7,13 +7,11 @@ fn main() {
     let ion = Ion::new();
 
     let src = r#"
-c = 0;
-f = fn(a, b) {
-    c = a + b;
-};
+fn a() {};
 
-f("ttttttttttttt
-              tttttttt", 4334);
+c = 4;
+print(c);
+return c;
     "#;
 
     let module = ion.parse_str(src).unwrap_or_else(|err| {
