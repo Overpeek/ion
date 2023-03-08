@@ -12,7 +12,7 @@ f = fn(a, b) {
     c = a + b;
 };
 
-f\("ttttttttttttt
+f("ttttttttttttt
               tttttttt", 4334);
     "#;
 
