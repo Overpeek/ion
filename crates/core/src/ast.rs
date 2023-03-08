@@ -159,7 +159,7 @@ impl<'i> Assign<'i> {
 pub struct Func<'i> {
     pub name: Ident<'i>,
     pub params: Vec<Ident<'i>>,
-    pub block: Option<Block<'i>>,
+    pub block: Block<'i>,
 }
 
 impl<'i> Func<'i> {
@@ -192,7 +192,7 @@ impl<'i> Func<'i> {
     }
 
     pub fn with_block(mut self, block: Block<'i>) -> Self {
-        self.block = Some(block);
+        self.block = block;
         self
     }
 }

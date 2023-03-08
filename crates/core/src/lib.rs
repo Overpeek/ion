@@ -6,7 +6,6 @@ use self::{
 use crate::err::IonParseError;
 use lalrpop_util::{lalrpop_mod, ParseError};
 use serde::Serialize;
-use std::{borrow::Cow, fmt};
 
 //
 
