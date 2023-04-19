@@ -3,23 +3,27 @@ use darling::{
     FromDeriveInput, FromField, FromVariant,
 };
 use proc_macro::TokenStream;
-use proc_macro2::{Ident, TokenStream as TokenStream2};
+use proc_macro2::{Ident, Span, TokenStream as TokenStream2};
 use quote::quote;
 use syn::{parse_macro_input, DeriveInput, Generics};
 
 //
 
 #[derive(FromDeriveInput)]
-#[darling(attributes(tree))]
+#[darling(attributes(to_static))]
 struct DebugTreeOpts {
     ident: Ident,
     generics: Generics,
 
     data: Data<Variant, Field>,
+
+    result: Option<String>,
+    #[darling(default)]
+    debug: bool,
 }
 
 #[derive(FromField)]
-#[darling(attributes(tree))]
+#[darling(attributes(to_static))]
 struct Field {
     ident: Option<Ident>,
     // #[darling(default)]
@@ -29,43 +33,171 @@ struct Field {
 }
 
 #[derive(FromVariant)]
-#[darling(attributes(tree))]
+#[darling(attributes(to_static))]
 struct Variant {
     ident: Ident,
 
     fields: Fields<Field>,
 }
 
-/* #[proc_macro_derive(ToOwned)]
-pub fn derive_to_owned(input: TokenStream) -> TokenStream {
-    _to_owned(&parse_macro_input!(input as DeriveInput)).unwrap_or_else(|err| err)
+#[proc_macro_derive(ToStatic, attributes(to_static))]
+pub fn derive_to_static(input: TokenStream) -> TokenStream {
+    _to_static(&parse_macro_input!(input as DeriveInput)).unwrap_or_else(|err| err)
 }
 
-fn _to_owned(input: &DeriveInput) -> Result<TokenStream, TokenStream> {
-    let input = DebugTreeOpts::from_derive_input(input).map_err(|err| err.write_errors())?;
+fn _to_static(input: &DeriveInput) -> Result<TokenStream, TokenStream> {
+    let input: DebugTreeOpts =
+        DebugTreeOpts::from_derive_input(input).map_err(|err| err.write_errors())?;
 
-    let ident = input.ident;
+    let data_ident = input.ident;
     let (imp, typ, wher) = input.generics.split_for_impl();
 
-    Ok(if input.data.is_enum() {
-        todo!()
-    } else {
-        quote! {
-            impl #imp std::borrow::ToOwned for #ident #typ #wher {
-                type Owned = #ident <'static>;
+    let constructor = match input.data {
+        Data::Enum(variants) => {
+            let matchers = variants.into_iter().fold(quote! {}, |acc, new| {
+                let variant_ident = new.ident;
 
-                fn to_owned(&self) -> Self::Owned {
-                    Self::Owned {
+                let pattern = to_static_pattern(&new.fields);
+                let constructor = to_static_constructor(&new.fields);
 
-                    }
+                quote! {
+                    #acc
+                    Self::#variant_ident #pattern => #data_ident::#variant_ident #constructor,
+                }
+            });
+
+            quote! {
+                match self {
+                    #matchers
                 }
             }
         }
-    }
-    .into())
-} */
+        Data::Struct(fields) => {
+            let pattern = to_static_pattern(&fields);
+            let constructor = to_static_constructor(&fields);
+            quote! {
+                let Self #pattern = self;
+                #data_ident #constructor
+            }
+        }
+    };
 
-#[proc_macro_derive(DebugTree)]
+    let result = if let Some(result) = input.result {
+        let result = Ident::new(&result, Span::call_site());
+        quote! { #result }
+    } else {
+        quote! { #data_ident <'static> }
+    };
+
+    let impl_tokens = quote! {
+        impl #imp ToStatic for #data_ident #typ #wher {
+            type Static = #result;
+
+            fn to_static(&self) -> Self::Static {
+                #constructor
+            }
+        }
+    };
+
+    if input.debug {
+        panic!("Debug: {}", impl_tokens);
+    }
+
+    Ok(impl_tokens.into())
+}
+
+fn to_static_pattern(val: &Fields<Field>) -> TokenStream2 {
+    match val.style {
+        Style::Tuple => {
+            let pattern = val
+                .fields
+                .iter()
+                .enumerate()
+                .fold(quote! {}, |acc, (i, _)| {
+                    let ident = format!("_{i}");
+                    let ident = Ident::new(&ident, Span::call_site());
+                    let comma = if i == 0 {
+                        quote! {}
+                    } else {
+                        quote! {,}
+                    };
+                    quote! { #acc #comma #ident }
+                });
+
+            quote! {
+                (#pattern)
+            }
+        }
+        Style::Struct => {
+            let pattern = val
+                .fields
+                .iter()
+                .enumerate()
+                .fold(quote! {}, |acc, (i, new)| {
+                    let ident = new.ident.as_ref().expect("Tuple structs are not supported");
+                    let comma = if i == 0 {
+                        quote! {}
+                    } else {
+                        quote! {,}
+                    };
+                    quote! { #acc #comma #ident }
+                });
+
+            quote! {
+                { #pattern }
+            }
+        }
+        Style::Unit => quote! {},
+    }
+}
+
+fn to_static_constructor(/* path: TokenStream2, */ val: &Fields<Field>) -> TokenStream2 {
+    match val.style {
+        Style::Tuple => {
+            let constructor = val
+                .fields
+                .iter()
+                .enumerate()
+                .fold(quote! {}, |acc, (i, _)| {
+                    let ident = format!("_{i}");
+                    let ident = Ident::new(&ident, Span::call_site());
+                    // let ident = syn::Member::Unnamed(syn::Index::from(i));
+                    let comma = if i == 0 {
+                        quote! {}
+                    } else {
+                        quote! {,}
+                    };
+                    quote! { #acc #comma ToStatic::to_static(#ident) }
+                });
+
+            quote! {
+                (#constructor)
+            }
+        }
+        Style::Struct => {
+            let constructor = val
+                .fields
+                .iter()
+                .enumerate()
+                .fold(quote! {}, |acc, (i, new)| {
+                    let ident = new.ident.as_ref().expect("Tuple structs are not supported");
+                    let comma = if i == 0 {
+                        quote! {}
+                    } else {
+                        quote! {,}
+                    };
+                    quote! { #acc #comma #ident : ToStatic::to_static(#ident) }
+                });
+
+            quote! {
+                { #constructor }
+            }
+        }
+        Style::Unit => quote! { {} },
+    }
+}
+
+/* #[proc_macro_derive(DebugTree)]
 pub fn derive_debug_tree(input: TokenStream) -> TokenStream {
     _debug_tree(&parse_macro_input!(input as DeriveInput)).unwrap_or_else(|err| err)
 }
@@ -185,4 +317,4 @@ fn _debug_tree(input: &DeriveInput) -> Result<TokenStream, TokenStream> {
         }
     }
     .into())
-}
+} */

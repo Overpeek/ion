@@ -1,7 +1,6 @@
 use self::{
     ast::Module,
     err::{IonError, IonResult},
-    llvm::Compiler,
 };
 use crate::err::IonParseError;
 use lalrpop_util::{lalrpop_mod, ParseError};
@@ -12,7 +11,8 @@ use serde::Serialize;
 lalrpop_mod!(pub grammar);
 pub mod ast;
 pub mod err;
-pub mod llvm;
+// pub mod llvm;
+// pub mod ty;
 mod util;
 
 //
@@ -42,7 +42,8 @@ impl Ion {
     }
 
     pub fn compile_ast(&self, ast: &Module) -> IonResult<()> {
-        Compiler::compile_ast(ast, None);
+        // println!("type check: {:#?}", ty::Module::new(ast));
+        // Compiler::compile_ast(ast, None);
         Ok(())
     }
 
