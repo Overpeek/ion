@@ -11,6 +11,7 @@ use serde::Serialize;
 lalrpop_mod!(pub grammar);
 pub mod ast;
 pub mod err;
+pub mod prelude;
 // pub mod llvm;
 // pub mod ty;
 mod util;

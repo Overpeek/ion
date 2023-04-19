@@ -1,11 +1,10 @@
+use crate::util::{IterDisplay, Padding};
 use owo_colors::OwoColorize;
 use std::{
     fmt::{self, Display},
     ops::Range,
 };
 use thiserror::Error;
-
-use crate::util::{IterDisplay, Padding};
 
 //
 

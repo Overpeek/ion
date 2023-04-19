@@ -1,5 +1,6 @@
-use ion_core::Ion;
 use std::process::exit;
+
+use ion_core::prelude::*;
 
 //
 
@@ -7,12 +8,10 @@ fn main() {
     let ion = Ion::new();
 
     let src = r#"
-fn a() {};
-
-c = 4;
+fn a() { return 4; };
+c = a();
 print(c);
-return c;
-    "#;
+"#;
 
     let module = ion.parse_str(src).unwrap_or_else(|err| {
         eprintln!("{}", err.pretty_print(true, src, "<src>"));
@@ -25,27 +24,4 @@ return c;
         eprintln!("{}", err.pretty_print(true, src, "<src>"));
         exit(0)
     });
-
-    /*
-    f = function() {
-        print(4);
-    };
-
-    f();
-
-    function f() {
-        print(5);
-    }
-
-    f();
-
-    x = 4;
-         * */
-
-    // Module
-    //   Assignment
-    //     target: x
-    //     value: FunctionCall
-    //       name: "print"
-    //       params: []
 }

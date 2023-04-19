@@ -1,3 +1,4 @@
+use crate::util::ToStatic;
 use ion_macros::ToStatic;
 use serde::Serialize;
 
@@ -53,8 +54,6 @@ impl<'i> Module<'i> {
         self.start.block.0 .0.extend(stmts);
         self
     }
-
-    pub fn to_static() {}
 }
 
 impl Default for Module<'_> {
@@ -69,43 +68,5 @@ impl Default for Module<'_> {
 impl<'i> From<Stmts<'i>> for Module<'i> {
     fn from(stmts: Stmts<'i>) -> Self {
         Self::default().with_stmts(stmts)
-    }
-}
-
-pub trait ToStatic {
-    type Static;
-
-    fn to_static(&self) -> Self::Static;
-}
-
-impl<T: ToStatic> ToStatic for Vec<T> {
-    type Static = Vec<T::Static>;
-
-    fn to_static(&self) -> Self::Static {
-        self.into_iter().map(|item| item.to_static()).collect()
-    }
-}
-
-impl<T: ToStatic> ToStatic for Box<T> {
-    type Static = Box<T::Static>;
-
-    fn to_static(&self) -> Self::Static {
-        Box::new(self.as_ref().to_static())
-    }
-}
-
-impl<A: ToStatic, B: ToStatic> ToStatic for (A, B) {
-    type Static = (A::Static, B::Static);
-
-    fn to_static(&self) -> Self::Static {
-        (self.0.to_static(), self.1.to_static())
-    }
-}
-
-impl ToStatic for usize {
-    type Static = Self;
-
-    fn to_static(&self) -> Self::Static {
-        *self
     }
 }

@@ -6,6 +6,25 @@ use std::borrow::Cow;
 
 /// Callable function
 ///
+/// All Ion functions are like 'lamdas' or 'closures'.
+/// They might or might not be just structs with generic methods.
+///
+/// This allows this statically typed code:
+/// ```ignore
+/// let x = fn(p) { return p + p; };
+///
+/// print(x(2));   // prints 4
+/// print(x("2")); // prints 22
+/// ```
+///
+/// This basically compiles down to something like this:
+/// ```
+/// let x = <nameless fn struct #xyz>;
+///
+/// print(<nameless fn struct #xyz (int)>::call(2));
+/// print(<nameless fn struct #xyz (str)>::call("2"));
+/// ```
+///
 /// TODO: extern functions (bodyless)
 #[derive(Debug, Clone, ToStatic, Serialize)]
 pub struct Fn<'i> {

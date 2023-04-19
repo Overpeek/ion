@@ -77,3 +77,43 @@ where
         Ok(())
     }
 }
+
+//
+
+pub trait ToStatic {
+    type Static;
+
+    fn to_static(&self) -> Self::Static;
+}
+
+impl<T: ToStatic> ToStatic for Vec<T> {
+    type Static = Vec<T::Static>;
+
+    fn to_static(&self) -> Self::Static {
+        self.iter().map(|item| item.to_static()).collect()
+    }
+}
+
+impl<T: ToStatic> ToStatic for Box<T> {
+    type Static = Box<T::Static>;
+
+    fn to_static(&self) -> Self::Static {
+        Box::new(self.as_ref().to_static())
+    }
+}
+
+impl<A: ToStatic, B: ToStatic> ToStatic for (A, B) {
+    type Static = (A::Static, B::Static);
+
+    fn to_static(&self) -> Self::Static {
+        (self.0.to_static(), self.1.to_static())
+    }
+}
+
+impl ToStatic for usize {
+    type Static = Self;
+
+    fn to_static(&self) -> Self::Static {
+        *self
+    }
+}
