@@ -1,5 +1,6 @@
-use super::ToStatic;
 use std::borrow::Cow;
+
+use super::ToStatic;
 
 //
 

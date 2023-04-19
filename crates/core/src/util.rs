@@ -1,5 +1,7 @@
 use std::fmt::{Debug, Display, Formatter, Result};
 
+use crate::ast::fsize;
+
 //
 
 pub struct IterList<I: Iterator>(pub I);
@@ -111,6 +113,22 @@ impl<A: ToStatic, B: ToStatic> ToStatic for (A, B) {
 }
 
 impl ToStatic for usize {
+    type Static = Self;
+
+    fn to_static(&self) -> Self::Static {
+        *self
+    }
+}
+
+impl ToStatic for fsize {
+    type Static = Self;
+
+    fn to_static(&self) -> Self::Static {
+        *self
+    }
+}
+
+impl ToStatic for bool {
     type Static = Self;
 
     fn to_static(&self) -> Self::Static {

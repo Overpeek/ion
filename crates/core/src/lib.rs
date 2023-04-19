@@ -1,19 +1,22 @@
-use self::{
-    ast::Module,
-    err::{IonError, IonResult},
-};
-use crate::err::IonParseError;
 use lalrpop_util::{lalrpop_mod, ParseError};
 use serde::Serialize;
+
+use self::{
+    ast::Module,
+    compiler::Compiler,
+    err::{IonError, IonResult},
+    ty::ResolveType,
+};
+use crate::err::IonParseError;
 
 //
 
 lalrpop_mod!(pub grammar);
 pub mod ast;
+pub mod compiler;
 pub mod err;
 pub mod prelude;
-// pub mod llvm;
-// pub mod ty;
+pub mod ty;
 mod util;
 
 //
@@ -33,18 +36,20 @@ impl Ion {
     }
 
     pub fn parse_str<'i>(&self, input: &'i str) -> IonResult<Module<'i>> {
-        self.parse_str_inner(input)
+        let mut ast = self.parse_str_inner(input)?;
+        ast.type_of(&mut <_>::default())?;
+        Ok(ast)
     }
 
     pub fn compile_str(&self, input: &str) -> IonResult<()> {
-        let ast = self.parse_str(input)?;
-        self.compile_ast(&ast)?;
+        let mut ast = self.parse_str(input)?;
+        self.compile_ast(&mut ast)?;
         Ok(())
     }
 
-    pub fn compile_ast(&self, ast: &Module) -> IonResult<()> {
+    pub fn compile_ast(&self, ast: &mut Module) -> IonResult<()> {
         // println!("type check: {:#?}", ty::Module::new(ast));
-        // Compiler::compile_ast(ast, None);
+        Compiler::compile_ast(ast, None);
         Ok(())
     }
 

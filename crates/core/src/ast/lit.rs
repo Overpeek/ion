@@ -1,11 +1,13 @@
-use super::{fsize, ToStatic};
+use std::borrow::Cow;
+
 use lalrpop_util::{lexer::Token, ParseError};
 use serde::Serialize;
-use std::borrow::Cow;
+
+use super::{fsize, ToStatic};
 
 //
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, ToStatic, Serialize)]
 #[serde(untagged)]
 pub enum Literal<'i> {
     Bool(bool),
@@ -31,18 +33,5 @@ impl<'i> Literal<'i> {
 
     pub fn parse_str(lit: &'i str) -> Self {
         Self::String(Cow::Borrowed(&lit[1..lit.len() - 1]))
-    }
-}
-
-impl ToStatic for Literal<'_> {
-    type Static = Literal<'static>;
-
-    fn to_static(&self) -> Self::Static {
-        match self {
-            Literal::Bool(v) => Literal::Bool(*v),
-            Literal::Int(v) => Literal::Int(*v),
-            Literal::Float(v) => Literal::Float(*v),
-            Literal::String(v) => Literal::String(v.clone().into_owned().into()),
-        }
     }
 }

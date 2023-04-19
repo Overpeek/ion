@@ -1,6 +1,7 @@
-use crate::util::ToStatic;
 use ion_macros::ToStatic;
 use serde::Serialize;
+
+use crate::util::ToStatic;
 
 //
 
@@ -46,12 +47,12 @@ impl<'i> Module<'i> {
     }
 
     pub fn with_stmt(mut self, stmt: Stmt<'i>) -> Self {
-        self.start.block.0 .0.push(stmt);
+        self.start.block.stmts.push(stmt);
         self
     }
 
     pub fn with_stmts(mut self, stmts: impl IntoIterator<Item = Stmt<'i>>) -> Self {
-        self.start.block.0 .0.extend(stmts);
+        self.start.block.stmts.extend(stmts);
         self
     }
 }

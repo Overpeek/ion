@@ -1,5 +1,7 @@
-use super::{Expr, Ident, ToStatic};
 use serde::Serialize;
+
+use super::{Expr, Ident, ToStatic};
+use crate::ty::IonType;
 
 //
 
@@ -15,8 +17,9 @@ use serde::Serialize;
 /// global a = value
 /// ```
 ///
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, ToStatic, Serialize)]
 pub struct Assign<'i> {
+    pub ty: IonType,
     pub target: Ident<'i>,
     pub value: Expr<'i>,
     pub global: bool,
@@ -25,6 +28,7 @@ pub struct Assign<'i> {
 impl<'i> Assign<'i> {
     pub fn new(target: Ident<'i>, value: Expr<'i>) -> Self {
         Self {
+            ty: IonType::Unknown,
             target,
             value,
             global: false,
@@ -38,18 +42,5 @@ impl<'i> Assign<'i> {
     pub fn with_global(mut self, global: bool) -> Self {
         self.global = global;
         self
-    }
-}
-
-impl ToStatic for Assign<'_> {
-    type Static = Assign<'static>;
-
-    fn to_static(&self) -> Self::Static {
-        let target: std::borrow::Cow<'static, str> = self.target.to_static();
-        Self::Static {
-            target,
-            value: self.value.to_static(),
-            global: self.global,
-        }
     }
 }

@@ -1,6 +1,8 @@
-use super::{Block, Expr, Ident, ToStatic};
-use serde::Serialize;
 use std::borrow::Cow;
+
+use serde::Serialize;
+
+use super::{Block, Expr, Ident, ToStatic};
 
 //
 

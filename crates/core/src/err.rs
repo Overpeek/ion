@@ -1,10 +1,15 @@
-use crate::util::{IterDisplay, Padding};
-use owo_colors::OwoColorize;
 use std::{
     fmt::{self, Display},
     ops::Range,
 };
+
+use owo_colors::OwoColorize;
 use thiserror::Error;
+
+use crate::{
+    ty::IonTypeError,
+    util::{IterDisplay, Padding},
+};
 
 //
 
@@ -72,7 +77,10 @@ pub enum IonCompileError {}
 #[derive(Debug, Error)]
 pub enum IonError {
     #[error("Parse error: {0}")]
-    Parse(IonParseError),
+    Parse(#[from] IonParseError),
+
+    #[error("Type resolve error: {0}")]
+    Type(#[from] IonTypeError),
 }
 
 pub type IonResult<T> = Result<T, IonError>;
@@ -137,6 +145,9 @@ impl fmt::Display for IonPretty<'_, &IonError> {
                 },
                 f,
             ),
+            err => {
+                panic!("{err}");
+            }
         }
     }
 }

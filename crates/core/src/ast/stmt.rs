@@ -1,6 +1,10 @@
-use super::{Assign, Expr, Fn, FnCall, Return, ReturnVoid, ToStatic};
-use serde::Serialize;
 use std::ops::{Deref, DerefMut};
+
+use once_cell::sync::OnceCell;
+use serde::Serialize;
+
+use super::{Assign, Expr, Fn, FnCall, Return, ReturnVoid, ToStatic};
+use crate::ty::IonType;
 
 //
 
@@ -66,7 +70,7 @@ pub enum Stmt<'i> {
     /// A return from the function
     ///
     /// ```text
-    /// return 4 + 4;
+    /// return 4;
     /// ```
     Return(Return<'i>),
 
@@ -117,10 +121,16 @@ impl<'i> Stmt<'i> {
 
 /// A group of statements surrounded by `{` and `}`
 #[derive(Debug, Clone, ToStatic, Default, Serialize)]
-pub struct Block<'i>(pub Stmts<'i>);
+pub struct Block<'i> {
+    pub ty: IonType,
+    pub stmts: Stmts<'i>,
+}
 
 impl<'i> From<Stmts<'i>> for Block<'i> {
-    fn from(value: Stmts<'i>) -> Self {
-        Self(value)
+    fn from(stmts: Stmts<'i>) -> Self {
+        Self {
+            ty: <_>::default(),
+            stmts,
+        }
     }
 }

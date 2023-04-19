@@ -1,10 +1,14 @@
-use super::{Expr, ToStatic};
 use serde::Serialize;
+
+use crate::ty::IonType;
+
+use super::{Expr, ToStatic};
 
 //
 
 #[derive(Debug, Clone, ToStatic, Serialize)]
 pub struct BinExpr<'i> {
+    pub ty: IonType,
     pub sides: Box<(Expr<'i>, Expr<'i>)>,
     pub op: BinOp,
 }
@@ -12,6 +16,7 @@ pub struct BinExpr<'i> {
 impl<'i> BinExpr<'i> {
     pub fn new(left: Expr<'i>, op: BinOp, right: Expr<'i>) -> Self {
         Self {
+            ty: <_>::default(),
             sides: Box::new((left, right)),
             op,
         }

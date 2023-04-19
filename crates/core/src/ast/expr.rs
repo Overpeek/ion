@@ -1,5 +1,6 @@
-use super::{BinExpr, Fn, FnCall, Literal, Path, ToStatic};
 use serde::Serialize;
+
+use super::{BinExpr, Fn, FnCall, Literal, Path, ToStatic};
 
 //
 
