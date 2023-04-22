@@ -210,18 +210,17 @@ impl fmt::Display for IonPretty<'_, &IonParseError> {
                     let row: blue = row;
                 };
 
-                writeln!(
-                    f,
-                    "{error}: Unexpected EOF{}",
-                    IterDisplay {
-                        iter: expected.iter(),
-                        empty: "",
-                        single: ", expected ",
-                        multiple: ", expected one of ",
-                        sep: ", ",
-                        last_sep: " or ",
-                    }
-                )?;
+                write!(f, "{error}: Unexpected EOF")?;
+                for part in IterDisplay::new(
+                    expected.iter(),
+                    "",
+                    ", expected ",
+                    ", expected one of ",
+                    ", ",
+                    " or ",
+                ) {
+                    write!(f, "{part}")?;
+                }
                 writeln!(f, "{pad}{arrow} {file}:{row_}:{col}")?;
                 writeln!(f, "{pad} {bar}")?;
                 writeln!(f, "{row} {bar} {line}")?;
@@ -243,18 +242,17 @@ impl fmt::Display for IonPretty<'_, &IonParseError> {
                     let row: blue = row;
                 };
 
-                writeln!(
-                    f,
-                    "{error}: Unexpected token{}",
-                    IterDisplay {
-                        iter: expected.iter(),
-                        empty: "",
-                        single: ", expected ",
-                        multiple: ", expected one of ",
-                        sep: ", ",
-                        last_sep: " or ",
-                    }
-                )?;
+                write!(f, "{error}: Unexpected token")?;
+                for part in IterDisplay::new(
+                    expected.iter(),
+                    "",
+                    ", expected ",
+                    ", expected one of ",
+                    ", ",
+                    " or ",
+                ) {
+                    write!(f, "{part}")?;
+                }
                 writeln!(f, "{pad}{arrow} {file}:{row_}:{col}")?;
                 writeln!(f, "{pad} {bar}")?;
                 writeln!(f, "{row} {bar} {line}")?;

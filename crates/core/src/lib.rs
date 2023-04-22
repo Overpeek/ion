@@ -50,6 +50,7 @@ impl Ion {
     }
 
     pub fn compile_ast(&self, ast: &mut Module) -> IonResult<()> {
+        println!("{ast}");
         let mut typer = <_>::default();
         ast.type_of(&mut typer)?;
         // println!("type check: {:#?}", ty::Module::new(ast));
@@ -164,10 +165,7 @@ mod tests {
 
     #[test]
     fn unexpected_token_2() {
-        let code = r#""
-
-
-            ""#;
+        let code = r#"""#;
         let ion = Ion::new();
         let err = ion.parse_str(code).unwrap_err();
 

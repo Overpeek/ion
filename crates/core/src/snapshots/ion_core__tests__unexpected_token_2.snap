@@ -2,12 +2,9 @@
 source: crates/core/src/lib.rs
 expression: "err.pretty_print(false, code, \"<code>\")"
 ---
-error: Unexpected token, expected one of "fn", "global" or r#"[a-zA-Z_][\\w_]*"#
+error: Invalid token
  --> <code>:1:1
   |
 1 | "
   | ^
-  |
-4 |             "
-  | ^^^^^^^^^^^^^
 

@@ -1,3 +1,5 @@
+use std::fmt;
+
 use serde::Serialize;
 
 use super::{Expr, Ident, ToStatic};
@@ -42,5 +44,13 @@ impl<'i> Assign<'i> {
     pub fn with_global(mut self, global: bool) -> Self {
         self.global = global;
         self
+    }
+
+    pub fn code(&self, f: &mut fmt::Formatter, indent: usize) -> fmt::Result {
+        if self.global {
+            write!(f, "global ")?;
+        }
+        write!(f, "{} = ", self.target)?;
+        self.value.code(f, indent)
     }
 }

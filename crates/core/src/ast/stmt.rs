@@ -1,4 +1,7 @@
-use std::ops::{Deref, DerefMut};
+use std::{
+    fmt,
+    ops::{Deref, DerefMut},
+};
 
 use serde::Serialize;
 
@@ -10,6 +13,17 @@ use crate::ty::IonType;
 /// A group of 0 or more statements
 #[derive(Debug, Clone, ToStatic, Default, Serialize)]
 pub struct Stmts<'i>(pub Vec<Stmt<'i>>);
+
+impl Stmts<'_> {
+    pub fn code(&self, f: &mut fmt::Formatter, indent: usize) -> fmt::Result {
+        for stmt in self.iter() {
+            write!(f, "{:indent$}", "")?;
+            stmt.code(f, indent)?;
+            writeln!(f)?;
+        }
+        Ok(())
+    }
+}
 
 impl<'i> Deref for Stmts<'i> {
     type Target = Vec<Stmt<'i>>;
@@ -116,6 +130,18 @@ impl<'i> Stmt<'i> {
             Self::ReturnVoid(ReturnVoid)
         }
     }
+
+    pub fn code(&self, f: &mut fmt::Formatter, indent: usize) -> fmt::Result {
+        match self {
+            Stmt::Assign(v) => v.code(f, indent),
+            Stmt::Expr(v) => v.code(f, indent),
+            Stmt::Return(v) => v.code(f, indent),
+            Stmt::ReturnVoid(v) => v.code(f, indent),
+            Stmt::Conditional() => todo!(),
+            Stmt::IteratorLoop() => todo!(),
+            Stmt::Loop() => todo!(),
+        }
+    }
 }
 
 /// A group of statements surrounded by `{` and `}`
@@ -123,6 +149,14 @@ impl<'i> Stmt<'i> {
 pub struct Block<'i> {
     pub ty: IonType,
     pub stmts: Stmts<'i>,
+}
+
+impl Block<'_> {
+    pub fn code(&self, f: &mut fmt::Formatter, indent: usize) -> fmt::Result {
+        writeln!(f, "{{")?;
+        self.stmts.code(f, indent + 4)?;
+        write!(f, "{:indent$}}}", "")
+    }
 }
 
 impl<'i> From<Stmts<'i>> for Block<'i> {

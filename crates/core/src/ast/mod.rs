@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, fmt};
 
 use ion_macros::ToStatic;
 use serde::Serialize;
@@ -57,6 +57,10 @@ impl<'i> Module<'i> {
         self.start.block.stmts.extend(stmts);
         self
     }
+
+    pub fn code(&self, f: &mut fmt::Formatter, indent: usize) -> fmt::Result {
+        self.start.block.stmts.code(f, indent)
+    }
 }
 
 impl Default for Module<'_> {
@@ -64,6 +68,12 @@ impl Default for Module<'_> {
         Self {
             start: Fn::new().with_name("_start"),
         }
+    }
+}
+
+impl fmt::Display for Module<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        self.code(f, 0)
     }
 }
 

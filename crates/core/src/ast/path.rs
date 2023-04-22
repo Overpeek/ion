@@ -1,7 +1,9 @@
+use std::fmt;
+
 use serde::Serialize;
 
 use super::{Ident, ToStatic};
-use crate::ty::IonType;
+use crate::{ty::IonType, util::IterDisplay};
 
 //
 
@@ -18,5 +20,12 @@ impl<'i> Path<'i> {
             ty: IonType::Unknown,
             parts,
         }
+    }
+
+    pub fn code(&self, f: &mut fmt::Formatter, _: usize) -> fmt::Result {
+        for part in IterDisplay::new(self.parts.iter(), "", "", "", ", ", ", ") {
+            write!(f, "{part}")?;
+        }
+        Ok(())
     }
 }

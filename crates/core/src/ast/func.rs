@@ -1,4 +1,4 @@
-use std::borrow::Cow;
+use std::{borrow::Cow, fmt};
 
 use serde::Serialize;
 
@@ -21,7 +21,7 @@ use crate::ty::IonType;
 /// ```
 ///
 /// This basically compiles down to something like this:
-/// ```
+/// ```ignore
 /// let x = <nameless fn struct #xyz>;
 ///
 /// print(<nameless fn struct #xyz (int)>::call(2));
@@ -68,6 +68,11 @@ impl<'i> Fn<'i> {
         self.block = block;
         self
     }
+
+    pub fn code(&self, f: &mut fmt::Formatter, indent: usize) -> fmt::Result {
+        write!(f, "fn <{}> ", self.name)?;
+        self.block.code(f, indent)
+    }
 }
 
 impl Default for Fn<'_> {
@@ -98,6 +103,16 @@ impl<'i> FnCall<'i> {
             args,
         }
     }
+
+    pub fn code(&self, f: &mut fmt::Formatter, indent: usize) -> fmt::Result {
+        write!(f, "{}(", self.name,)?;
+
+        for arg in self.args.iter() {
+            arg.code(f, indent)?;
+        }
+
+        write!(f, ")",)
+    }
 }
 
 #[derive(Debug, Clone, ToStatic, Serialize)]
@@ -105,6 +120,19 @@ pub struct Return<'i> {
     pub value: Expr<'i>,
 }
 
+impl Return<'_> {
+    pub fn code(&self, f: &mut fmt::Formatter, indent: usize) -> fmt::Result {
+        write!(f, "return ")?;
+        self.value.code(f, indent)
+    }
+}
+
 #[derive(Debug, Clone, ToStatic, Default, Serialize)]
 #[to_static(result = "Self")]
 pub struct ReturnVoid;
+
+impl ReturnVoid {
+    pub fn code(&self, f: &mut fmt::Formatter, indent: usize) -> fmt::Result {
+        write!(f, "return")
+    }
+}

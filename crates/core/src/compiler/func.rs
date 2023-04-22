@@ -10,7 +10,9 @@ use crate::{
 
 impl Fn<'_> {
     pub fn compile_proto<'a>(&mut self, compiler: &mut Compiler<'a>) -> FunctionValue<'a> {
-        let ty = self.type_of_resolved().unwrap();
+        let ty = self.block.type_of_resolved().unwrap();
+
+        println!("{} == {ty:?}", self.name);
 
         let params: Vec<_> = self
             .params
@@ -19,11 +21,15 @@ impl Fn<'_> {
             .collect();
 
         let f = ty.ll_fn_type(compiler.ctx, &params[..], false);
-        compiler.module.add_function(
-            &format!("{} nfn {}", self.name.as_ref(), rand::random::<usize>()),
-            f,
-            None,
-        )
+        if self.name == "_start" {
+            compiler.module.add_function(self.name.as_ref(), f, None)
+        } else {
+            compiler.module.add_function(
+                &format!("{} nfn {}", self.name.as_ref(), rand::random::<usize>()),
+                f,
+                None,
+            )
+        }
     }
 
     pub fn compile_body<'a>(
@@ -37,7 +43,7 @@ impl Fn<'_> {
         compiler.builder.position_at_end(entry);
 
         for stmt in self.block.stmts.iter_mut() {
-            stmt.compile(compiler)?;
+            stmt.compile(compiler);
         }
 
         Some(())
@@ -59,6 +65,7 @@ impl Compile for Fn<'_> {
 impl Compile for Return<'_> {
     fn compile<'a>(&mut self, compiler: &mut Compiler<'a>) -> Option<BasicValueEnum<'a>> {
         let value = self.value.compile(compiler)?;
+        println!("building return for {value}");
         compiler.builder.build_return(Some(&value));
         None
     }
@@ -96,15 +103,15 @@ impl Compile for FnCall<'_> {
             .map(|arg| arg.type_of_resolved().unwrap())
             .collect();
 
-        let f = compiler
-            .fns
-            .get(&fn_id)
-            .unwrap()
-            .get(&params[..])
-            .unwrap()
-            .clone();
+        let f = *compiler.fns.get(&fn_id).unwrap().get(&params[..]).unwrap();
 
-        compiler.builder.build_call(f, &args[..], "fn-call");
-        todo!()
+        Some(
+            compiler
+                .builder
+                .build_call(f, &args[..], "fn-call")
+                .try_as_basic_value()
+                .left()
+                .unwrap_or_else(|| compiler.ctx.struct_type(&[], false).const_zero().into()),
+        )
     }
 }

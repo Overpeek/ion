@@ -8,8 +8,15 @@ fn main() {
     let ion = Ion::new();
 
     let src = r#"
+// a = fn() {
+//     b = fn() { return 4 }
+//     return b
+// }
+// x = 4 + 4
+// return (a())() + x
 a = fn() { return 4 + 4 }
-return a()
+x = 4 + 4
+return a() + x
 // a = fn(x) { return x + x }
 // c = 5 + 1
 // return c

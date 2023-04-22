@@ -1,3 +1,5 @@
+use std::fmt;
+
 use serde::Serialize;
 
 use super::{Expr, ToStatic};
@@ -20,6 +22,14 @@ impl<'i> BinExpr<'i> {
             op,
         }
     }
+
+    pub fn code(&self, f: &mut fmt::Formatter, indent: usize) -> fmt::Result {
+        self.sides.0.code(f, indent)?;
+        write!(f, " ")?;
+        self.op.code(f, indent)?;
+        write!(f, " ")?;
+        self.sides.1.code(f, indent)
+    }
 }
 
 #[derive(Debug, Clone, Copy, ToStatic, Serialize)]
@@ -29,4 +39,19 @@ pub enum BinOp {
     Sub,
     Mul,
     Div,
+}
+
+impl BinOp {
+    pub fn code(&self, f: &mut fmt::Formatter, indent: usize) -> fmt::Result {
+        write!(
+            f,
+            "{}",
+            match self {
+                BinOp::Add => '+',
+                BinOp::Sub => '-',
+                BinOp::Mul => '*',
+                BinOp::Div => '/',
+            }
+        )
+    }
 }

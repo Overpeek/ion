@@ -1,3 +1,5 @@
+use std::fmt;
+
 use serde::Serialize;
 
 use super::{BinExpr, Fn, FnCall, Literal, Path, ToStatic};
@@ -96,6 +98,19 @@ pub enum Expr<'i> {
     /// a.b.c
     /// ´´´
     Path(Path<'i>),
+}
+
+impl Expr<'_> {
+    pub fn code(&self, f: &mut fmt::Formatter, indent: usize) -> fmt::Result {
+        match self {
+            Expr::NamelessFn(v) => v.code(f, indent),
+            Expr::FnCall(v) => v.code(f, indent),
+            Expr::UnExpr() => todo!(),
+            Expr::BinExpr(v) => v.code(f, indent),
+            Expr::Literal(v) => v.code(f, indent),
+            Expr::Path(v) => v.code(f, indent),
+        }
+    }
 }
 
 impl ToStatic for Expr<'_> {

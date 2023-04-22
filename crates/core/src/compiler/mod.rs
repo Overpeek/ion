@@ -3,7 +3,9 @@ use std::collections::HashMap;
 use inkwell::{
     builder::Builder,
     context::Context,
+    execution_engine::ExecutionEngine,
     module::Module as LlvmModule,
+    passes::{PassManager, PassManagerBuilder},
     support::LLVMString,
     targets::{CodeModel, FileType, RelocMode, Target, TargetMachine},
     types::{AnyTypeEnum, BasicMetadataTypeEnum, FunctionType},
@@ -76,7 +78,6 @@ impl<'a> Compiler<'a> {
     fn compile_ast_with(mut self, ast: &Module, ty: &TypeResolver) {
         let mut v = vec![];
         for (id, params, f) in ty.functions() {
-            // println!("COMPILING PROTO {id} {} {}", f.name, f.block);
             let mut f = f.to_static();
             let proto = f.compile_proto(&mut self);
             self.fns.entry(id).or_default().insert(params, proto);
@@ -85,7 +86,6 @@ impl<'a> Compiler<'a> {
         for (proto, mut f) in v {
             f.compile_body(&mut self, proto);
         }
-        // ast.compile(&mut self);
 
         if let Ok(ir) = self.dump_ir().to_str() {
             println!(
@@ -102,7 +102,35 @@ impl<'a> Compiler<'a> {
             println!("IR contains invalid UTF-8")
         }
 
-        Target::initialize_all(&<_>::default());
+        /* let fpmb = PassManagerBuilder::create();
+        fpmb.set_optimization_level(OptimizationLevel::Aggressive);
+        fpmb.set_inliner_with_threshold(1024);
+
+        let lpm = PassManager::create(&());
+        let mpm = PassManager::create(&());
+        let fpm = PassManager::create(&self.module);
+
+        fpmb.populate_lto_pass_manager(&lpm, true, true);
+        fpmb.populate_module_pass_manager(&mpm);
+        fpmb.populate_function_pass_manager(&fpm);
+        fpm.initialize();
+
+        // fpm.run_on(input); */
+
+        let engine = self
+            .module
+            .create_jit_execution_engine(OptimizationLevel::Aggressive)
+            .unwrap();
+
+        let start = unsafe {
+            engine
+                .get_function::<unsafe extern "C" fn() -> i32>("_start")
+                .unwrap()
+        };
+
+        println!("program returned {}", unsafe { start.call() });
+
+        /* Target::initialize_all(&<_>::default());
 
         let triple = TargetMachine::get_default_triple();
         println!("{}", triple);
@@ -133,7 +161,7 @@ impl<'a> Compiler<'a> {
                 FileType::Object,
                 std::path::Path::new("out.o"),
             )
-            .unwrap();
+            .unwrap(); */
     }
 }
 

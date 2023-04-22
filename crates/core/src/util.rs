@@ -2,7 +2,7 @@ use std::{
     collections::HashMap,
     fmt::{Debug, Display, Formatter, Result},
     hash::Hash,
-    sync::atomic::AtomicU32,
+    iter::Peekable,
 };
 
 use crate::ast::fsize;
@@ -13,17 +13,23 @@ pub struct IterList<I: Iterator>(pub I);
 
 pub struct Padding(pub u32);
 
-#[derive(Clone, Copy)]
-pub struct IterDisplay<'s, I: ExactSizeIterator>
-where
-    I::Item: Display,
-{
-    pub iter: I,
+#[derive(Clone)]
+pub struct IterDisplay<'s, I: ExactSizeIterator> {
+    pub iter: Option<I>,
     pub empty: &'s str,
     pub single: &'s str,
     pub multiple: &'s str,
     pub sep: &'s str,
     pub last_sep: &'s str,
+    len: usize,
+    n: usize,
+    next: Vec<IterDisplayPart<'s, I::Item>>,
+}
+
+#[derive(Clone)]
+pub enum IterDisplayPart<'s, I> {
+    Item(I),
+    Str(&'s str),
 }
 
 //
@@ -56,7 +62,78 @@ impl Display for Padding {
     }
 }
 
-impl<I: ExactSizeIterator> Display for IterDisplay<'_, I>
+impl<'a, I: ExactSizeIterator> IterDisplay<'a, I> {
+    pub fn new(
+        iter: I,
+        empty: &'a str,
+        single: &'a str,
+        multiple: &'a str,
+        sep: &'a str,
+        last_sep: &'a str,
+    ) -> Self {
+        let len = iter.len();
+        let iter = Some(iter);
+        Self {
+            iter,
+            empty,
+            single,
+            multiple,
+            sep,
+            last_sep,
+            len,
+            n: 0,
+            next: vec![],
+        }
+    }
+}
+
+impl<'a, I: Display> Display for IterDisplayPart<'a, I> {
+    fn fmt(&self, f: &mut Formatter) -> Result {
+        match self {
+            IterDisplayPart::Item(item) => write!(f, "{item}"),
+            IterDisplayPart::Str(s) => write!(f, "{s}"),
+        }
+    }
+}
+
+impl<'a, I: ExactSizeIterator> Iterator for IterDisplay<'a, I>
+where
+    I::Item: Display,
+    I: Clone,
+{
+    type Item = IterDisplayPart<'a, I::Item>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if let Some(next) = self.next.pop() {
+            return Some(next);
+        }
+
+        let Some(iter) = self.iter.as_mut() else {
+            return None;
+        };
+
+        let n = self.n;
+        self.n += 1;
+
+        if n == 0 && self.len == 0 {
+            return Some(IterDisplayPart::Str(self.single));
+        } else if n == 0 && self.len == 1 {
+            return Some(IterDisplayPart::Str(self.empty));
+        } else if n == 0 {
+            return Some(IterDisplayPart::Str(self.multiple));
+        }
+
+        if n + 2 == self.len * 2 {
+            Some(IterDisplayPart::Str(self.last_sep))
+        } else if n % 2 == 0 && n != self.len * 2 {
+            Some(IterDisplayPart::Str(self.sep))
+        } else {
+            Some(IterDisplayPart::Item(iter.next()?))
+        }
+    }
+}
+
+/* impl<I: ExactSizeIterator> Display for IterDisplay<'_, I>
 where
     I::Item: Display,
     I: Clone,
@@ -83,7 +160,7 @@ where
 
         Ok(())
     }
-}
+} */
 
 //
 

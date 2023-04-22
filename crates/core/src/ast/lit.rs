@@ -1,4 +1,4 @@
-use std::borrow::Cow;
+use std::{borrow::Cow, fmt};
 
 use lalrpop_util::{lexer::Token, ParseError};
 use serde::Serialize;
@@ -33,5 +33,14 @@ impl<'i> Literal<'i> {
 
     pub fn parse_str(lit: &'i str) -> Self {
         Self::String(Cow::Borrowed(&lit[1..lit.len() - 1]))
+    }
+
+    pub fn code(&self, f: &mut fmt::Formatter, indent: usize) -> fmt::Result {
+        match self {
+            Literal::Bool(v) => write!(f, "{v}"),
+            Literal::Int(v) => write!(f, "{v}"),
+            Literal::Float(v) => write!(f, "{v}"),
+            Literal::String(v) => write!(f, "{v}"),
+        }
     }
 }

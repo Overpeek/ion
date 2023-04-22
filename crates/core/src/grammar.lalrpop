@@ -70,17 +70,17 @@ StmtFn: (Ident<'input>, Expr<'input>) = {
 
 Expr: Expr<'input> = {
     // Nameless function declaration
-    "fn(" <p:Parameters> ")" <b:Block> => {
-        Expr::NamelessFn(
-            Fn::new()
-                .with_params(p)
-                .with_random_name()
-                .with_block(b)
-        )
-    },
+    // "fn(" <p:Parameters> ")" <b:Block> => {
+    //     Expr::NamelessFn(
+    //         Fn::new()
+    //             .with_params(p)
+    //             .with_random_name()
+    //             .with_block(b)
+    //     )
+    // },
 
     // Fntion call
-    <i:Ident> <t:Tuple> => Expr::FnCall(FnCall::new(i, t)),
+    // <i:Ident> <t:Tuple> => Expr::FnCall(FnCall::new(i, t)),
 
     // Binary expressions
     BinExpr => <>,
@@ -131,6 +131,15 @@ TermOp: BinOp = {
 };
 
 Fact: Expr<'input> = {
+    "fn(" <p:Parameters> ")" <b:Block> => {
+        Expr::NamelessFn(
+            Fn::new()
+                .with_params(p)
+                .with_random_name()
+                .with_block(b)
+        )
+    },
+    <i:Ident> <t:Tuple> => Expr::FnCall(FnCall::new(i, t)),
     "(" <e:Expr> ")" => e,
     Path => Expr::Path(<>),
     Literal => Expr::Literal(<>),
