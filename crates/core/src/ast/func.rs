@@ -2,9 +2,8 @@ use std::borrow::Cow;
 
 use serde::Serialize;
 
-use crate::ty::IonType;
-
 use super::{Block, Expr, Ident, ToStatic};
+use crate::ty::IonType;
 
 //
 

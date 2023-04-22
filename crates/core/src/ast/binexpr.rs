@@ -1,8 +1,7 @@
 use serde::Serialize;
 
-use crate::ty::IonType;
-
 use super::{Expr, ToStatic};
+use crate::ty::IonType;
 
 //
 

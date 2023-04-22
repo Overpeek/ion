@@ -1,10 +1,3 @@
-use crate::{
-    ast::{Assign, BinExpr, Block, Expr, Fn, FnCall, Literal, Path, Return, ReturnVoid, Stmt},
-    prelude::Module,
-    util::ToStatic,
-};
-use ion_macros::ToStatic;
-use serde::{Deserialize, Serialize};
 use std::{
     collections::{
         hash_map::{DefaultHasher, Entry},
@@ -13,7 +6,16 @@ use std::{
     hash::{Hash, Hasher},
     sync::atomic::{AtomicU32, Ordering},
 };
+
+use ion_macros::ToStatic;
+use serde::{Deserialize, Serialize};
 use thiserror::Error;
+
+use crate::{
+    ast::{Assign, BinExpr, Block, Expr, Fn, FnCall, Literal, Path, Return, ReturnVoid, Stmt},
+    prelude::Module,
+    util::ToStatic,
+};
 
 //
 

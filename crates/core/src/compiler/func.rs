@@ -1,11 +1,10 @@
 use inkwell::values::BasicValueEnum;
 
+use super::{Compile, Compiler};
 use crate::{
     ast::{Fn, Return, ReturnVoid},
     ty::ResolveType,
 };
-
-use super::{Compile, Compiler};
 
 //
 
