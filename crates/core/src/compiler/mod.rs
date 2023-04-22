@@ -6,17 +6,23 @@ use inkwell::{
     module::Module as LlvmModule,
     support::LLVMString,
     targets::{CodeModel, FileType, RelocMode, Target, TargetMachine},
-    types::{AnyTypeEnum, BasicMetadataTypeEnum, BasicTypeEnum, FunctionType},
+    types::{AnyTypeEnum, BasicMetadataTypeEnum, FunctionType},
     values::BasicValueEnum,
     OptimizationLevel,
 };
 use once_cell::unsync::Lazy;
 
-use crate::{
-    ast::{Assign, BinExpr, BinOp, Expr, Fn, Literal, Path, Return, Stmt},
-    prelude::Module,
-    ty::{IonType, ResolveType},
-};
+use crate::{prelude::Module, ty::IonType};
+
+//
+
+mod assign;
+mod binexpr;
+mod expr;
+mod func;
+mod lit;
+mod path;
+mod stmt;
 
 //
 
@@ -121,8 +127,13 @@ impl IonType {
             IonType::Float => ctx.f32_type().into(),
             IonType::Str => ctx.i8_type().ptr_type(<_>::default()).into(),
             IonType::Void => ctx.void_type().into(),
+
+            // TODO: captures
+            IonType::NamelessFn { .. } => ctx.struct_type(&[], false).into(),
+
             IonType::Struct => ctx.struct_type(&[], false).into(),
             IonType::Tuple => ctx.struct_type(&[], false).into(),
+
             IonType::Unknown => unreachable!(),
         }
     }
@@ -142,12 +153,19 @@ impl IonType {
                 .ptr_type(<_>::default())
                 .fn_type(param_types, is_var_args),
             IonType::Void => ctx.void_type().fn_type(param_types, is_var_args),
+
+            // TODO: captures
+            IonType::NamelessFn { .. } => ctx
+                .struct_type(&[], false)
+                .fn_type(param_types, is_var_args),
+
             IonType::Struct => ctx
                 .struct_type(&[], false)
                 .fn_type(param_types, is_var_args),
             IonType::Tuple => ctx
                 .struct_type(&[], false)
                 .fn_type(param_types, is_var_args),
+
             IonType::Unknown => unreachable!(),
         }
     }
@@ -157,31 +175,9 @@ pub trait Compile {
     fn compile<'a>(&mut self, compiler: &mut Compiler<'a>) -> Option<BasicValueEnum<'a>>;
 }
 
-//
-
 impl Compile for Module<'_> {
     fn compile<'a>(&mut self, compiler: &mut Compiler<'a>) -> Option<BasicValueEnum<'a>> {
         self.start.compile(compiler)
-    }
-}
-
-impl Compile for Fn<'_> {
-    fn compile<'a>(&mut self, compiler: &mut Compiler<'a>) -> Option<BasicValueEnum<'a>> {
-        // TODO:
-
-        let ty = self.type_of_assume_resolved();
-
-        let f = ty.ll_fn_type(compiler.ctx, &[], false);
-        let f = compiler.module.add_function("_start", f, None);
-
-        let entry = compiler.ctx.append_basic_block(f, "entry");
-        compiler.builder.position_at_end(entry);
-
-        for stmt in self.block.stmts.iter_mut() {
-            stmt.compile(compiler);
-        }
-
-        None
     }
 }
 
@@ -192,106 +188,3 @@ impl Compile for Fn<'_> {
         }
     }
 } */
-
-impl Compile for Stmt<'_> {
-    fn compile<'a>(&mut self, compiler: &mut Compiler<'a>) -> Option<BasicValueEnum<'a>> {
-        match self {
-            Stmt::Assign(v) => v.compile(compiler),
-            Stmt::FnCall(_) => todo!(),
-            Stmt::Fn(_) => todo!(),
-            Stmt::Return(v) => v.compile(compiler),
-            Stmt::ReturnVoid(_) => todo!(),
-            Stmt::Conditional() => todo!(),
-            Stmt::IteratorLoop() => todo!(),
-            Stmt::Loop() => todo!(),
-        }
-    }
-}
-
-impl Compile for Assign<'_> {
-    fn compile<'a>(&mut self, compiler: &mut Compiler<'a>) -> Option<BasicValueEnum<'a>> {
-        let value = self.value.compile(compiler).expect("Expr returned nothing");
-        let key = self.target.to_string();
-
-        compiler.vars.entry(key).or_default().push(value);
-
-        None
-    }
-}
-
-impl Compile for Return<'_> {
-    fn compile<'a>(&mut self, compiler: &mut Compiler<'a>) -> Option<BasicValueEnum<'a>> {
-        let value = self.value.compile(compiler)?;
-        compiler.builder.build_return(Some(&value));
-        None
-    }
-}
-
-impl Compile for Expr<'_> {
-    fn compile<'a>(&mut self, compiler: &mut Compiler<'a>) -> Option<BasicValueEnum<'a>> {
-        match self {
-            Expr::NamelessFn(_) => todo!(),
-            Expr::FnCall(_) => todo!(),
-            Expr::UnExpr() => todo!(),
-            Expr::BinExpr(v) => v.compile(compiler),
-            Expr::Literal(v) => v.compile(compiler),
-            Expr::Path(v) => v.compile(compiler),
-        }
-    }
-}
-
-impl Compile for BinExpr<'_> {
-    fn compile<'a>(&mut self, compiler: &mut Compiler<'a>) -> Option<BasicValueEnum<'a>> {
-        let lhs = self.sides.0.compile(compiler)?;
-        let rhs = self.sides.1.compile(compiler)?;
-
-        match (lhs, rhs) {
-            (BasicValueEnum::IntValue(lhs), BasicValueEnum::IntValue(rhs)) => {
-                let b = &compiler.builder;
-                let n = "int bin expr";
-                Some(
-                    match self.op {
-                        BinOp::Add => b.build_int_add(lhs, rhs, n),
-                        BinOp::Sub => b.build_int_sub(lhs, rhs, n),
-                        BinOp::Mul => b.build_int_mul(lhs, rhs, n),
-                        BinOp::Div => b.build_int_signed_div(lhs, rhs, n),
-                    }
-                    .into(),
-                )
-            }
-            (BasicValueEnum::FloatValue(lhs), BasicValueEnum::FloatValue(rhs)) => {
-                let b = &compiler.builder;
-                let n = "float bin expr";
-                Some(
-                    match self.op {
-                        BinOp::Add => b.build_float_add(lhs, rhs, n),
-                        BinOp::Sub => b.build_float_sub(lhs, rhs, n),
-                        BinOp::Mul => b.build_float_mul(lhs, rhs, n),
-                        BinOp::Div => b.build_float_div(lhs, rhs, n),
-                    }
-                    .into(),
-                )
-            }
-            _ => None,
-        }
-    }
-}
-
-impl Compile for Literal<'_> {
-    fn compile<'a>(&mut self, compiler: &mut Compiler<'a>) -> Option<BasicValueEnum<'a>> {
-        Some(match self {
-            Literal::Int(i) => compiler.ctx.i32_type().const_int(*i as _, false).into(),
-            Literal::Bool(b) => compiler.ctx.bool_type().const_int(*b as _, false).into(),
-            Literal::Float(f) => compiler.ctx.f32_type().const_float(*f as _).into(),
-            Literal::String(s) => compiler.ctx.const_string(s.as_bytes(), false).into(),
-        })
-    }
-}
-
-impl Compile for Path<'_> {
-    fn compile<'a>(&mut self, compiler: &mut Compiler<'a>) -> Option<BasicValueEnum<'a>> {
-        let part = self.parts.first().unwrap(); // TODO: whole path
-        let value = *compiler.vars.get(part.as_ref()).unwrap().last().unwrap();
-        Some(value)
-    }
-}

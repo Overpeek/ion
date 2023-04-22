@@ -1,4 +1,9 @@
-use std::fmt::{Debug, Display, Formatter, Result};
+use std::{
+    collections::HashMap,
+    fmt::{Debug, Display, Formatter, Result},
+    hash::Hash,
+    sync::atomic::AtomicU32,
+};
 
 use crate::ast::fsize;
 
@@ -88,6 +93,19 @@ pub trait ToStatic {
     fn to_static(&self) -> Self::Static;
 }
 
+impl<K: ToStatic, V: ToStatic> ToStatic for HashMap<K, V>
+where
+    K::Static: Hash + Eq,
+{
+    type Static = HashMap<K::Static, V::Static>;
+
+    fn to_static(&self) -> Self::Static {
+        self.iter()
+            .map(|(k, v)| (k.to_static(), v.to_static()))
+            .collect()
+    }
+}
+
 impl<T: ToStatic> ToStatic for Vec<T> {
     type Static = Vec<T::Static>;
 
@@ -104,11 +122,27 @@ impl<T: ToStatic> ToStatic for Box<T> {
     }
 }
 
+impl ToStatic for String {
+    type Static = String;
+
+    fn to_static(&self) -> Self::Static {
+        self.clone()
+    }
+}
+
 impl<A: ToStatic, B: ToStatic> ToStatic for (A, B) {
     type Static = (A::Static, B::Static);
 
     fn to_static(&self) -> Self::Static {
         (self.0.to_static(), self.1.to_static())
+    }
+}
+
+impl ToStatic for u32 {
+    type Static = Self;
+
+    fn to_static(&self) -> Self::Static {
+        *self
     }
 }
 

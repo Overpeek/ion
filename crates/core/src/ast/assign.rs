@@ -1,7 +1,8 @@
 use serde::Serialize;
 
-use super::{Expr, Ident, ToStatic};
 use crate::ty::IonType;
+
+use super::{Expr, Ident, ToStatic};
 
 //
 
@@ -28,7 +29,7 @@ pub struct Assign<'i> {
 impl<'i> Assign<'i> {
     pub fn new(target: Ident<'i>, value: Expr<'i>) -> Self {
         Self {
-            ty: IonType::Unknown,
+            ty: <_>::default(),
             target,
             value,
             global: false,

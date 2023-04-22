@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use ion_macros::ToStatic;
 use serde::Serialize;
 

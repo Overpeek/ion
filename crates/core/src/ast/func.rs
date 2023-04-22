@@ -2,6 +2,8 @@ use std::borrow::Cow;
 
 use serde::Serialize;
 
+use crate::ty::IonType;
+
 use super::{Block, Expr, Ident, ToStatic};
 
 //
@@ -30,8 +32,11 @@ use super::{Block, Expr, Ident, ToStatic};
 /// TODO: extern functions (bodyless)
 #[derive(Debug, Clone, ToStatic, Serialize)]
 pub struct Fn<'i> {
+    pub ty: IonType,
     pub name: Ident<'i>,
-    pub params: Vec<Ident<'i>>,
+    /// the first param hides all captured variables OR it is a void
+    /// first param is the struct object, params after it are these:
+    pub params: Vec<(IonType, Ident<'i>)>,
     pub block: Block<'i>,
 }
 
@@ -53,7 +58,10 @@ impl<'i> Fn<'i> {
     }
 
     pub fn with_params(mut self, params: Vec<Ident<'i>>) -> Self {
-        self.params = params;
+        self.params = params
+            .into_iter()
+            .map(|ident| (IonType::Unknown, ident))
+            .collect();
         self
     }
 
@@ -66,6 +74,7 @@ impl<'i> Fn<'i> {
 impl Default for Fn<'_> {
     fn default() -> Self {
         Self {
+            ty: IonType::Unknown,
             name: Ident::Borrowed("incomplete function"),
             params: Default::default(),
             block: Default::default(),
@@ -75,13 +84,18 @@ impl Default for Fn<'_> {
 
 #[derive(Debug, Clone, ToStatic, Serialize)]
 pub struct FnCall<'i> {
+    pub ty: IonType,
     pub name: Ident<'i>,
     pub args: Vec<Expr<'i>>,
 }
 
 impl<'i> FnCall<'i> {
     pub fn new(name: Ident<'i>, args: Vec<Expr<'i>>) -> Self {
-        Self { name, args }
+        Self {
+            ty: <_>::default(),
+            name,
+            args,
+        }
     }
 }
 

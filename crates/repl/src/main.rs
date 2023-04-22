@@ -8,8 +8,11 @@ fn main() {
     let ion = Ion::new();
 
     let src = r#"
-c = 5 + 1
-return c
+a = fn() { return 4 + 4 }
+return a()
+// a = fn(x) { return x + x }
+// c = 5 + 1
+// return c
 "#;
 
     let mut module = ion.parse_str(src).unwrap_or_else(|err| {

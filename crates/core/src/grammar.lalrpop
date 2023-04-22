@@ -12,7 +12,7 @@ extern {
 match {
     // r"\s*" => { },
     // r";" => ";",
-    r"[\n\r;]" => ";",
+    r"[\n\r;]+" => ";",
     r"[^\S\n\r]*" => { },
     r"//[^\n\r]*[\n\r]*" => { }, // Skip `// comments`
     r"/\*[^*]*\*+(?:[^/*][^*]*\*+)*/" => { },  // Skip `/* comments */`
@@ -26,14 +26,20 @@ pub Module: Module<'input> = {
 };
 
 Stmts: Stmts<'input> = {
-    ";"* <s: (<Stmt> ";"+)*> => Stmts(s),
+    ";"? <mut v: (<Stmt> ";")*> <e: Stmt?> => match e {
+        Some(e) => {
+            v.push(e);
+            Stmts(v)
+        },
+        None => Stmts(v),
+    },
 };
 
 pub Stmt: Stmt<'input> = {
-    // Expr => Stmt::Expr(<>),
+    Expr => Stmt::Expr(<>),
 
     // Fntion call
-    <i:Ident> <t:Tuple> => Stmt::FnCall(FnCall::new(i, t)),
+    // <i:Ident> <t:Tuple> => Stmt::FnCall(FnCall::new(i, t)),
 
     // Named function
     <e:StmtFn> => Stmt::Assign(Assign::new(e.0, e.1)),

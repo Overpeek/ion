@@ -1,9 +1,8 @@
 use std::ops::{Deref, DerefMut};
 
-use once_cell::sync::OnceCell;
 use serde::Serialize;
 
-use super::{Assign, Expr, Fn, FnCall, Return, ReturnVoid, ToStatic};
+use super::{Assign, Expr, Return, ReturnVoid, ToStatic};
 use crate::ty::IonType;
 
 //
@@ -43,18 +42,19 @@ pub enum Stmt<'i> {
     /// An assignment of an [`Expression`] to a name
     Assign(Assign<'i>),
 
-    /* /// An expression
+    /// An expression
     ///
     /// [`Expression`]
-    Expr(Expr<'i>), */
-    /// A function call
+    Expr(Expr<'i>),
+
+    /* /// A function call
     ///
     /// ```text
     /// a(params)
     /// ```
-    FnCall(FnCall<'i>),
+    FnCall(FnCall<'i>), */
 
-    /// A named function
+    /* /// A named function
     ///
     /// ```text
     /// fn a(params) {}
@@ -65,8 +65,7 @@ pub enum Stmt<'i> {
     /// ```text
     /// a = fn(params) {}
     /// ```
-    Fn(Fn<'i>),
-
+    Fn(Fn<'i>), */
     /// A return from the function
     ///
     /// ```text

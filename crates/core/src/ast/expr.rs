@@ -12,7 +12,7 @@ pub enum Expr<'i> {
     /// function(params) {}
     /// ```
     NamelessFn(Fn<'i>),
-
+    // NamelessFnRef(u32),
     /// A function call
     ///
     /// ```text

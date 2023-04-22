@@ -37,7 +37,9 @@ impl Ion {
 
     pub fn parse_str<'i>(&self, input: &'i str) -> IonResult<Module<'i>> {
         let mut ast = self.parse_str_inner(input)?;
-        ast.type_of(&mut <_>::default())?;
+        let mut typer = <_>::default();
+        ast.type_of(&mut typer)?;
+        // println!("{}", self.to_yaml(&typer));
         Ok(ast)
     }
 
