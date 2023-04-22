@@ -138,6 +138,14 @@ impl<A: ToStatic, B: ToStatic> ToStatic for (A, B) {
     }
 }
 
+impl<T: ToStatic> ToStatic for Option<T> {
+    type Static = Option<T::Static>;
+
+    fn to_static(&self) -> Self::Static {
+        self.as_ref().map(|v| v.to_static())
+    }
+}
+
 impl ToStatic for u32 {
     type Static = Self;
 

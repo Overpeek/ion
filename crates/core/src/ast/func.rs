@@ -84,6 +84,7 @@ impl Default for Fn<'_> {
 #[derive(Debug, Clone, ToStatic, Serialize)]
 pub struct FnCall<'i> {
     pub ty: IonType,
+    pub fn_ty: IonType,
     pub name: Ident<'i>,
     pub args: Vec<Expr<'i>>,
 }
@@ -92,6 +93,7 @@ impl<'i> FnCall<'i> {
     pub fn new(name: Ident<'i>, args: Vec<Expr<'i>>) -> Self {
         Self {
             ty: <_>::default(),
+            fn_ty: <_>::default(),
             name,
             args,
         }

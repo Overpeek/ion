@@ -36,9 +36,9 @@ impl Ion {
     }
 
     pub fn parse_str<'i>(&self, input: &'i str) -> IonResult<Module<'i>> {
-        let mut ast = self.parse_str_inner(input)?;
-        let mut typer = <_>::default();
-        ast.type_of(&mut typer)?;
+        let ast = self.parse_str_inner(input)?;
+        // let mut typer = <_>::default();
+        // ast.type_of(&mut typer)?;
         // println!("{}", self.to_yaml(&typer));
         Ok(ast)
     }
@@ -50,8 +50,10 @@ impl Ion {
     }
 
     pub fn compile_ast(&self, ast: &mut Module) -> IonResult<()> {
+        let mut typer = <_>::default();
+        ast.type_of(&mut typer)?;
         // println!("type check: {:#?}", ty::Module::new(ast));
-        Compiler::compile_ast(ast, None);
+        Compiler::compile_ast(ast, &typer, None);
         Ok(())
     }
 

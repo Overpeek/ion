@@ -7,12 +7,17 @@ use inkwell::{
     support::LLVMString,
     targets::{CodeModel, FileType, RelocMode, Target, TargetMachine},
     types::{AnyTypeEnum, BasicMetadataTypeEnum, FunctionType},
-    values::BasicValueEnum,
+    values::{BasicValueEnum, FunctionValue},
     OptimizationLevel,
 };
 use once_cell::unsync::Lazy;
 
-use crate::{prelude::Module, ty::IonType};
+use crate::{
+    ast::Fn,
+    prelude::Module,
+    ty::{IonType, TypeResolver},
+    util::ToStatic,
+};
 
 //
 
@@ -32,16 +37,17 @@ pub struct Compiler<'a> {
     builder: Builder<'a>,
 
     vars: HashMap<String, Vec<BasicValueEnum<'a>>>,
+    fns: HashMap<u32, HashMap<Vec<IonType>, FunctionValue<'a>>>,
 }
 
 impl<'a> Compiler<'a> {
-    pub fn compile_ast(ast: &mut Module, src: Option<&str>) {
+    pub fn compile_ast(ast: &Module, ty: &TypeResolver, src: Option<&str>) {
         thread_local! {
             static CTX: Lazy<Context> = Lazy::new(Context::create);
         }
 
         CTX.with(|ctx| {
-            Compiler::new(ctx, src).compile_ast_with(ast); // Self would borrow for
+            Compiler::new(ctx, src).compile_ast_with(ast, ty); // Self would borrow for
         });
     }
 
@@ -59,6 +65,7 @@ impl<'a> Compiler<'a> {
             builder,
 
             vars: <_>::default(),
+            fns: <_>::default(),
         }
     }
 
@@ -66,8 +73,19 @@ impl<'a> Compiler<'a> {
         self.module.print_to_string()
     }
 
-    fn compile_ast_with(mut self, ast: &mut Module) {
-        ast.compile(&mut self);
+    fn compile_ast_with(mut self, ast: &Module, ty: &TypeResolver) {
+        let mut v = vec![];
+        for (id, params, f) in ty.functions() {
+            // println!("COMPILING PROTO {id} {} {}", f.name, f.block);
+            let mut f = f.to_static();
+            let proto = f.compile_proto(&mut self);
+            self.fns.entry(id).or_default().insert(params, proto);
+            v.push((proto, f));
+        }
+        for (proto, mut f) in v {
+            f.compile_body(&mut self, proto);
+        }
+        // ast.compile(&mut self);
 
         if let Ok(ir) = self.dump_ir().to_str() {
             println!(
@@ -120,6 +138,24 @@ impl<'a> Compiler<'a> {
 }
 
 impl IonType {
+    fn ll_metadata_type<'a>(&self, ctx: &'a Context) -> BasicMetadataTypeEnum<'a> {
+        match self {
+            IonType::Bool => ctx.bool_type().into(),
+            IonType::Int => ctx.i32_type().into(),
+            IonType::Float => ctx.f32_type().into(),
+            IonType::Str => ctx.i8_type().ptr_type(<_>::default()).into(),
+            IonType::Void => ctx.struct_type(&[], false).into(),
+
+            // TODO: captures
+            IonType::NamelessFn { .. } => ctx.struct_type(&[], false).into(),
+
+            IonType::Struct => ctx.struct_type(&[], false).into(),
+            IonType::Tuple => ctx.struct_type(&[], false).into(),
+
+            IonType::Unknown => unreachable!(),
+        }
+    }
+
     fn ll_type<'a>(&self, ctx: &'a Context) -> AnyTypeEnum<'a> {
         match self {
             IonType::Bool => ctx.bool_type().into(),
@@ -175,11 +211,11 @@ pub trait Compile {
     fn compile<'a>(&mut self, compiler: &mut Compiler<'a>) -> Option<BasicValueEnum<'a>>;
 }
 
-impl Compile for Module<'_> {
+/* impl Compile for Module<'_> {
     fn compile<'a>(&mut self, compiler: &mut Compiler<'a>) -> Option<BasicValueEnum<'a>> {
         self.start.compile(compiler)
     }
-}
+} */
 
 /* impl Compile for Block<'_> {
     fn compile<'a>(&mut self, compiler: & mut Compiler<'a>) -> BasicTypeEnum {

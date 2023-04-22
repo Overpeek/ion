@@ -7,8 +7,16 @@ use crate::ast::{BinExpr, BinOp};
 
 impl Compile for BinExpr<'_> {
     fn compile<'a>(&mut self, compiler: &mut Compiler<'a>) -> Option<BasicValueEnum<'a>> {
-        let lhs = self.sides.0.compile(compiler)?;
-        let rhs = self.sides.1.compile(compiler)?;
+        let lhs = self
+            .sides
+            .0
+            .compile(compiler)
+            .expect("LHS returned nothing");
+        let rhs = self
+            .sides
+            .1
+            .compile(compiler)
+            .expect("RHS returned nothing");
 
         match (lhs, rhs) {
             (BasicValueEnum::IntValue(lhs), BasicValueEnum::IntValue(rhs)) => {
@@ -37,7 +45,9 @@ impl Compile for BinExpr<'_> {
                     .into(),
                 )
             }
-            _ => None,
+            (lhs, rhs) => {
+                panic!("cannot run op {:?} with {lhs} and {rhs}", self.op)
+            }
         }
     }
 }

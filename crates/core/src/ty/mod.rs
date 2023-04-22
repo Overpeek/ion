@@ -68,16 +68,57 @@ pub trait ResolveType {
 #[derive(Debug, Default, Serialize)]
 pub struct TypeResolver {
     vars: HashMap<String, Vec<IonType>>,
-    gen_fns: HashMap<GenericFnIdentifier, Fn<'static>>,
-    fns: HashMap<FnIdentifier, Fn<'static>>,
+    fns: HashMap<u32, FunctionStore>,
 }
 
-#[derive(Debug, PartialEq, Eq, Hash, Serialize)]
+#[derive(Debug, Default, Serialize)]
+pub struct FunctionStore {
+    template: Option<Fn<'static>>,
+    generated: HashMap<Vec<IonType>, Fn<'static>>,
+}
+
+impl TypeResolver {
+    pub fn functions(&self) -> impl Iterator<Item = (u32, Vec<IonType>, &'_ Fn<'static>)> {
+        self.fns.iter().flat_map(|(id, template)| {
+            template
+                .generated
+                .iter()
+                .map(move |(params, f)| (*id, params.clone(), f))
+        })
+        // self.fns.values().flat_map(|store| store.generated.values())
+    }
+
+    fn add_template(&mut self, id: u32, f: Fn<'static>) {
+        let template = self.fns.entry(id).or_default();
+        template.template = Some(f);
+    }
+
+    fn add_generated(&mut self, id: u32, f: Fn<'static>) {
+        let template = self.fns.entry(id).or_default();
+        template
+            .generated
+            .insert(f.params.iter().map(|(id, _)| *id).collect(), f);
+    }
+
+    fn get_template(&mut self, id: u32) -> Option<&'_ Fn<'static>> {
+        self.fns
+            .get(&id)
+            .and_then(|template| template.template.as_ref())
+    }
+
+    fn get_generated(&mut self, id: u32, p: &[IonType]) -> Option<&'_ Fn<'static>> {
+        self.fns
+            .get(&id)
+            .and_then(|template| template.generated.get(p))
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize)]
 struct GenericFnIdentifier {
     fn_id: u32,
 }
 
-#[derive(Debug, PartialEq, Eq, Hash, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize)]
 struct FnIdentifier {
     fn_id: u32,
     params: Vec<IonType>,
@@ -164,16 +205,9 @@ impl ResolveType for Fn<'_> {
 
         if self.params.is_empty() {
             self.block.type_of(res)?;
-            res.fns.insert(
-                FnIdentifier {
-                    fn_id: id,
-                    params: vec![],
-                },
-                self.to_static(),
-            );
+            res.add_generated(id, self.to_static());
         } else {
-            res.gen_fns
-                .insert(GenericFnIdentifier { fn_id: id }, self.to_static());
+            res.add_template(id, self.to_static());
             // generic function
         }
 
@@ -249,7 +283,7 @@ impl ResolveType for Stmt<'_> {
 
 impl ResolveType for FnCall<'_> {
     fn type_of(&mut self, res: &mut TypeResolver) -> IonTypeResult<IonType> {
-        let fn_ty = res
+        let fn_ty = *res
             .vars
             .get(self.name.as_ref())
             .and_then(|stack| stack.last())
@@ -257,15 +291,23 @@ impl ResolveType for FnCall<'_> {
 
         let ty = match fn_ty {
             IonType::NamelessFn { id } => {
-                let id = *id;
                 let params = self
                     .args
                     .iter_mut()
                     .map(|arg| arg.type_of(res))
                     .collect::<IonTypeResult<Vec<IonType>>>()?;
-                let fn_id = FnIdentifier { fn_id: id, params };
+                // let fn_id = FnIdentifier { fn_id: id, params };
 
-                if let Some(f) = res.fns.get(&fn_id) {
+                if let Some(f) = res.get_generated(id, &params) {
+                    f.block.type_of_resolved()?
+                } else {
+                    let mut template = res.get_template(id).unwrap().to_static();
+                    template.type_of(res)?;
+                    let ty = template.block.type_of(res)?;
+                    res.add_generated(id, template);
+                    ty
+                }
+                /* if let Some(f) = res.fns.get(&fn_id) {
                     f.block.type_of_resolved()
                 } else {
                     let mut generated_fn = res
@@ -275,9 +317,13 @@ impl ResolveType for FnCall<'_> {
                         .to_static();
                     generated_fn.type_of(res)?;
                     let ty = generated_fn.block.type_of_resolved();
+                    for ((ty, _), compiled_ty) in generated_fn.params.iter_mut().zip(params.iter())
+                    {
+                        *ty = *compiled_ty;
+                    }
                     res.fns.insert(fn_id, generated_fn);
                     ty
-                }?
+                }? */
             }
             other => panic!("{other:?} is not callable"),
         };
@@ -285,6 +331,7 @@ impl ResolveType for FnCall<'_> {
         if ty == IonType::Unknown {
             return Err(IonTypeError::TypeNotResolved);
         }
+        self.fn_ty = fn_ty;
         self.ty = ty;
 
         Ok(self.ty)
