@@ -90,22 +90,24 @@ impl Default for Fn<'_> {
 pub struct FnCall<'i> {
     pub ty: IonType,
     pub fn_ty: IonType,
-    pub name: Ident<'i>,
+    pub func: Box<Expr<'i>>,
     pub args: Vec<Expr<'i>>,
 }
 
 impl<'i> FnCall<'i> {
-    pub fn new(name: Ident<'i>, args: Vec<Expr<'i>>) -> Self {
+    pub fn new(func: Expr<'i>, args: Vec<Expr<'i>>) -> Self {
         Self {
             ty: <_>::default(),
             fn_ty: <_>::default(),
-            name,
+            func: Box::new(func),
             args,
         }
     }
 
     pub fn code(&self, f: &mut fmt::Formatter, indent: usize) -> fmt::Result {
-        write!(f, "{}(", self.name,)?;
+        write!(f, "(")?;
+        self.func.code(f, indent)?;
+        write!(f, ")(")?;
 
         for arg in self.args.iter() {
             arg.code(f, indent)?;

@@ -283,11 +283,13 @@ impl ResolveType for Stmt<'_> {
 
 impl ResolveType for FnCall<'_> {
     fn type_of(&mut self, res: &mut TypeResolver) -> IonTypeResult<IonType> {
-        let fn_ty = *res
-            .vars
-            .get(self.name.as_ref())
-            .and_then(|stack| stack.last())
-            .ok_or(IonTypeError::VariableNotAssigned)?;
+        let fn_ty = self.func.type_of(res)?;
+
+        /* let fn_ty = *res
+        .vars
+        .get(self.name.as_ref())
+        .and_then(|stack| stack.last())
+        .ok_or(IonTypeError::VariableNotAssigned)?; */
 
         let ty = match fn_ty {
             IonType::NamelessFn { id } => {

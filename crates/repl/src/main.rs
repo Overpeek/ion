@@ -14,9 +14,7 @@ fn main() {
 // }
 // x = 4 + 4
 // return (a())() + x
-a = fn() { return 4 + 4 }
-x = 4 + 4
-return a() + x
+return fn() { return fn() { return 4 } }()() + 4
 // a = fn(x) { return x + x }
 // c = 5 + 1
 // return c

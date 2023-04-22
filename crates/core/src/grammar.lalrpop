@@ -139,7 +139,7 @@ Fact: Expr<'input> = {
                 .with_block(b)
         )
     },
-    <i:Ident> <t:Tuple> => Expr::FnCall(FnCall::new(i, t)),
+    <f:Fact> <t:Tuple> => Expr::FnCall(FnCall::new(f, t)),
     "(" <e:Expr> ")" => e,
     Path => Expr::Path(<>),
     Literal => Expr::Literal(<>),
