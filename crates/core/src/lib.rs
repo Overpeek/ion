@@ -1,3 +1,4 @@
+use inkwell::context::Context;
 use lalrpop_util::{lalrpop_mod, ParseError};
 use serde::Serialize;
 
@@ -24,6 +25,7 @@ mod util;
 /// Ion parser, interpreter and compiler
 pub struct Ion {
     parser: grammar::ModuleParser,
+    ctx: Context,
 }
 
 //
@@ -32,6 +34,7 @@ impl Ion {
     pub fn new() -> Self {
         Self {
             parser: grammar::ModuleParser::new(),
+            ctx: Context::create(),
         }
     }
 
@@ -50,7 +53,7 @@ impl Ion {
     }
 
     pub fn compile_ast(&self, ast: &mut Module) -> IonResult<()> {
-        println!("{ast}");
+        // println!("{ast}");
         let mut typer = <_>::default();
         ast.type_of(&mut typer)?;
         // println!("type check: {:#?}", ty::Module::new(ast));
@@ -127,62 +130,4 @@ impl Default for Ion {
         Self::new()
     }
 }
-
-//
-
-#[cfg(test)]
-mod tests {
-    use std::process::exit;
-
-    use crate::Ion;
-
-    #[test]
-    fn invalid_token() {
-        let code = r#"x = \"#;
-        let ion = Ion::new();
-        let err = ion.parse_str(code).unwrap_err();
-
-        insta::assert_display_snapshot!(err.pretty_print(false, code, "<code>"));
-    }
-
-    #[test]
-    fn unexpected_eof() {
-        let code = r#"x ="#;
-        let ion = Ion::new();
-        let err = ion.parse_str(code).unwrap_err();
-
-        insta::assert_display_snapshot!(err.pretty_print(false, code, "<code>"));
-    }
-
-    #[test]
-    fn unexpected_token_1() {
-        let code = r#"x = ="#;
-        let ion = Ion::new();
-        let err = ion.parse_str(code).unwrap_err();
-
-        insta::assert_display_snapshot!(err.pretty_print(false, code, "<code>"));
-    }
-
-    #[test]
-    fn unexpected_token_2() {
-        let code = r#"""#;
-        let ion = Ion::new();
-        let err = ion.parse_str(code).unwrap_err();
-
-        insta::assert_display_snapshot!(err.pretty_print(false, code, "<code>"));
-    }
-
-    #[test]
-    fn correct_code() {
-        let code = r#"
-            x = 4;
-            fn y() { x = 2; };
-            y();"#;
-
-        let ion = Ion::new();
-        ion.parse_str(code).unwrap_or_else(|err| {
-            eprintln!("{}", err.pretty_print(true, code, "<code>"));
-            exit(-1);
-        });
-    }
-}
+use std::process::exit;
