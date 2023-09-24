@@ -6,10 +6,7 @@ use std::{
 use owo_colors::OwoColorize;
 use thiserror::Error;
 
-use crate::{
-    ty::IonTypeError,
-    util::{IterDisplay, Padding},
-};
+use crate::util::{IterDisplay, Padding};
 
 //
 
@@ -78,9 +75,6 @@ pub enum IonCompileError {}
 pub enum IonError {
     #[error("Parse error: {0}")]
     Parse(#[from] IonParseError),
-
-    #[error("Type resolve error: {0}")]
-    Type(#[from] IonTypeError),
 }
 
 pub type IonResult<T> = Result<T, IonError>;
@@ -145,9 +139,6 @@ impl fmt::Display for IonPretty<'_, &IonError> {
                 },
                 f,
             ),
-            err => {
-                panic!("{err}");
-            }
         }
     }
 }
@@ -227,22 +218,24 @@ impl fmt::Display for IonPretty<'_, &IonParseError> {
                 writeln!(f, "{pad} {bar} {:col0$}{hat}", "")?
             }
             IonParseError::UnexpectedToken {
+                token,
                 rows,
                 cols,
                 expected,
-                ..
             } => {
                 let (line, pad) = line_and_mag(input, rows.start);
                 let col0 = cols.start;
                 let (row, col) = (rows.start + 1, cols.start + 1);
                 let row_ = row;
 
+                let token = &input[token.clone()];
+
                 col! {
                     color;
                     let row: blue = row;
                 };
 
-                write!(f, "{error}: Unexpected token")?;
+                write!(f, "{error}: Unexpected token \"{token}\"")?;
                 for part in IterDisplay::new(
                     expected.iter(),
                     "",
@@ -348,7 +341,7 @@ fn line_and_mag(input: &str, row: usize) -> (&str, Padding) {
     (line, pad)
 }
 
-fn last_line_boundary_before(location: usize, input: &str) -> usize {
+/* fn last_line_boundary_before(location: usize, input: &str) -> usize {
     input
         .chars()
         .enumerate()
@@ -367,4 +360,4 @@ fn first_line_boundary_after(location: usize, input: &str) -> usize {
         .find(|(_, ch)| *ch == '\n')
         .map(|(i, _)| i)
         .unwrap_or(input.len())
-}
+} */

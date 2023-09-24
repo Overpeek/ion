@@ -3,11 +3,8 @@ use std::collections::HashMap;
 use inkwell::{
     builder::Builder,
     context::Context,
-    execution_engine::ExecutionEngine,
     module::Module as LlvmModule,
-    passes::{PassManager, PassManagerBuilder},
     support::LLVMString,
-    targets::{CodeModel, FileType, RelocMode, Target, TargetMachine},
     types::{AnyTypeEnum, BasicMetadataTypeEnum, FunctionType},
     values::{BasicValueEnum, FunctionValue},
     OptimizationLevel,
@@ -15,8 +12,7 @@ use inkwell::{
 use once_cell::unsync::Lazy;
 
 use crate::{
-    ast::Fn,
-    prelude::Module,
+    syntax::Module,
     ty::{IonType, TypeResolver},
     util::ToStatic,
 };

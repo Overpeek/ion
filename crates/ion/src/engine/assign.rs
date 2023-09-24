@@ -1,7 +1,7 @@
 use inkwell::values::BasicValueEnum;
 
 use super::{Compile, Compiler};
-use crate::ast::Assign;
+use crate::syntax::Assign;
 
 //
 

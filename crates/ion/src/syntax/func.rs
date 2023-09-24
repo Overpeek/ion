@@ -1,0 +1,124 @@
+use std::fmt;
+
+use arcstr::Substr;
+
+use crate::util::{IterDisplay, Padding, PrintSource, Source};
+
+use super::{Block, Expr};
+
+//
+
+#[derive(Debug, Clone)]
+pub struct FnDef {
+    pub id: Substr,
+    pub params: ParamList,
+    pub ty: Type,
+    pub block: Block,
+}
+
+impl fmt::Display for Source<'_, FnDef> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let FnDef {
+            id,
+            params,
+            ty,
+            block,
+        } = self.inner;
+
+        let pad = Padding(self.indent);
+
+        let params = params.as_source(self.indent);
+        let ty = ty.as_source(self.indent);
+        let block = block.as_source(self.indent + 4);
+
+        write!(f, "{pad}fn {id}({params}): {ty} {{\n{block}{pad}}}")
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct ParamList(pub Vec<Param>);
+
+impl fmt::Display for Source<'_, ParamList> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        for part in IterDisplay::new(
+            self.inner.0.iter().map(|p| p.as_source(self.indent)),
+            "",
+            "",
+            "",
+            ", ",
+            ", ",
+        ) {
+            write!(f, "{part}")?;
+        }
+
+        Ok(())
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct Param {
+    pub id: Substr,
+    pub ty: Type,
+}
+
+impl fmt::Display for Source<'_, Param> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let Param { id, ty } = self.inner;
+        let ty = ty.as_source(self.indent);
+
+        write!(f, "{id}: {ty}")
+    }
+}
+
+#[derive(Debug, Clone)]
+pub enum Type {
+    I32,
+    F32,
+    None,
+}
+
+impl fmt::Display for Source<'_, Type> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self.inner {
+            Type::I32 => write!(f, "i32"),
+            Type::F32 => write!(f, "f32"),
+            Type::None => write!(f, "none"),
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct FnCall {
+    // pub id: Expr,
+    pub id: Substr,
+    pub args: ArgList,
+}
+
+impl fmt::Display for Source<'_, FnCall> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let FnCall { id, args } = self.inner;
+        let args = args.as_source(self.indent);
+
+        write!(f, "{id}({args})")
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct ArgList(pub Vec<Expr>);
+
+impl fmt::Display for Source<'_, ArgList> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        for part in IterDisplay::new(
+            self.inner.0.iter().map(|e| e.as_source(self.indent)),
+            "",
+            "",
+            "",
+            ", ",
+            ", ",
+        ) {
+            write!(f, "{part}")?;
+        }
+
+        Ok(())
+    }
+}

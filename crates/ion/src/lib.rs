@@ -1,44 +1,49 @@
-use inkwell::context::Context;
 use lalrpop_util::{lalrpop_mod, ParseError};
-use serde::Serialize;
 
 use self::{
-    ast::Module,
-    compiler::Compiler,
     err::{IonError, IonResult},
-    ty::ResolveType,
+    ion::ModuleParser,
+    syntax::{lexer::Lexer, Module},
 };
-use crate::err::IonParseError;
+use crate::{err::IonParseError, util::PrintSource};
 
 //
 
-lalrpop_mod!(pub grammar);
-pub mod ast;
-pub mod compiler;
+lalrpop_mod!(pub ion);
+// pub mod engine;
 pub mod err;
-pub mod prelude;
-pub mod ty;
+pub mod syntax;
+// pub mod ty;
 mod util;
 
 //
 
 /// Ion parser, interpreter and compiler
-pub struct Ion {
-    parser: grammar::ModuleParser,
-    ctx: Context,
+pub struct State {
+    parser: ModuleParser,
 }
 
 //
 
-impl Ion {
+impl State {
     pub fn new() -> Self {
         Self {
-            parser: grammar::ModuleParser::new(),
-            ctx: Context::create(),
+            parser: ModuleParser::new(),
         }
     }
 
-    pub fn parse_str<'i>(&self, input: &'i str) -> IonResult<Module<'i>> {
+    pub fn run(&self, input: &str) -> IonResult<()> {
+        let mut ast = self.parse_str_inner(input)?;
+        ast.source_file = Some(arcstr::literal!("<src>"));
+
+        let src = ast.as_source(0);
+
+        println!("{src}");
+
+        Ok(())
+    }
+
+    /* pub fn parse_str<'i>(&self, input: &'i str) -> IonResult<Module<'i>> {
         let ast = self.parse_str_inner(input)?;
         // let mut typer = <_>::default();
         // ast.type_of(&mut typer)?;
@@ -63,14 +68,12 @@ impl Ion {
 
     pub fn to_yaml(&self, ast: &impl Serialize) -> String {
         serde_yaml::to_string(&ast).unwrap()
-    }
+    } */
 
-    fn parse_str_inner<'i>(&self, input: &'i str) -> IonResult<Module<'i>> {
+    fn parse_str_inner(&self, input: &str) -> IonResult<Module> {
         let mut errors = vec![];
 
-        let res = self.parser.parse(&mut errors, input);
-
-        let err = match res {
+        let err = match self.parser.parse(&mut errors, Lexer::new(input)) {
             Ok(module) => return Ok(module),
             Err(err) => err,
         };
@@ -125,9 +128,8 @@ impl Ion {
     }
 }
 
-impl Default for Ion {
+impl Default for State {
     fn default() -> Self {
         Self::new()
     }
 }
-use std::process::exit;

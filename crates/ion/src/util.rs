@@ -1,17 +1,8 @@
-use std::{
-    collections::HashMap,
-    fmt::{Debug, Display, Formatter, Result},
-    hash::Hash,
-    iter::Peekable,
-};
-
-use crate::ast::fsize;
+use std::fmt::{self, Debug, Display, Formatter, Result};
 
 //
 
 pub struct IterList<I: Iterator>(pub I);
-
-pub struct Padding(pub u32);
 
 #[derive(Clone)]
 pub struct IterDisplay<'s, I: ExactSizeIterator> {
@@ -56,12 +47,6 @@ where
     }
 }
 
-impl Display for Padding {
-    fn fmt(&self, f: &mut Formatter) -> Result {
-        write!(f, "{:1$}", "", self.0 as usize)
-    }
-}
-
 impl<'a, I: ExactSizeIterator> IterDisplay<'a, I> {
     pub fn new(
         iter: I,
@@ -96,38 +81,42 @@ impl<'a, I: Display> Display for IterDisplayPart<'a, I> {
     }
 }
 
-impl<'a, I: ExactSizeIterator> Iterator for IterDisplay<'a, I>
-where
-    I::Item: Display,
-    I: Clone,
-{
+impl<'a, I: ExactSizeIterator> Iterator for IterDisplay<'a, I> {
     type Item = IterDisplayPart<'a, I::Item>;
 
     fn next(&mut self) -> Option<Self::Item> {
         if let Some(next) = self.next.pop() {
+            // println!("return next");
             return Some(next);
         }
 
         let Some(iter) = self.iter.as_mut() else {
+            // println!("return none");
             return None;
         };
 
         let n = self.n;
         self.n += 1;
 
-        if n == 0 && self.len == 0 {
+        if n == 0 && self.len == 1 {
+            // println!("return single");
             return Some(IterDisplayPart::Str(self.single));
-        } else if n == 0 && self.len == 1 {
+        } else if n == 0 && self.len == 0 {
+            // println!("return empty");
             return Some(IterDisplayPart::Str(self.empty));
         } else if n == 0 {
+            // println!("return multi {}", self.len);
             return Some(IterDisplayPart::Str(self.multiple));
         }
 
         if n + 2 == self.len * 2 {
+            // println!("return lastsep");
             Some(IterDisplayPart::Str(self.last_sep))
         } else if n % 2 == 0 && n != self.len * 2 {
+            // println!("return sep");
             Some(IterDisplayPart::Str(self.sep))
         } else {
+            // println!("return next?");
             Some(IterDisplayPart::Item(iter.next()?))
         }
     }
@@ -164,93 +153,28 @@ where
 
 //
 
-pub trait ToStatic {
-    type Static;
+pub struct Padding(pub u32);
 
-    fn to_static(&self) -> Self::Static;
-}
-
-impl<K: ToStatic, V: ToStatic> ToStatic for HashMap<K, V>
-where
-    K::Static: Hash + Eq,
-{
-    type Static = HashMap<K::Static, V::Static>;
-
-    fn to_static(&self) -> Self::Static {
-        self.iter()
-            .map(|(k, v)| (k.to_static(), v.to_static()))
-            .collect()
+impl Display for Padding {
+    fn fmt(&self, f: &mut Formatter) -> Result {
+        write!(f, "{:1$}", "", self.0 as usize)
     }
 }
 
-impl<T: ToStatic> ToStatic for Vec<T> {
-    type Static = Vec<T::Static>;
+//
 
-    fn to_static(&self) -> Self::Static {
-        self.iter().map(|item| item.to_static()).collect()
+pub trait PrintSource: Sized {
+    fn as_source(&self, indent: u32) -> Source<Self> {
+        Source {
+            inner: self,
+            indent,
+        }
     }
 }
 
-impl<T: ToStatic> ToStatic for Box<T> {
-    type Static = Box<T::Static>;
-
-    fn to_static(&self) -> Self::Static {
-        Box::new(self.as_ref().to_static())
-    }
+pub struct Source<'a, T> {
+    pub inner: &'a T,
+    pub indent: u32,
 }
 
-impl ToStatic for String {
-    type Static = String;
-
-    fn to_static(&self) -> Self::Static {
-        self.clone()
-    }
-}
-
-impl<A: ToStatic, B: ToStatic> ToStatic for (A, B) {
-    type Static = (A::Static, B::Static);
-
-    fn to_static(&self) -> Self::Static {
-        (self.0.to_static(), self.1.to_static())
-    }
-}
-
-impl<T: ToStatic> ToStatic for Option<T> {
-    type Static = Option<T::Static>;
-
-    fn to_static(&self) -> Self::Static {
-        self.as_ref().map(|v| v.to_static())
-    }
-}
-
-impl ToStatic for u32 {
-    type Static = Self;
-
-    fn to_static(&self) -> Self::Static {
-        *self
-    }
-}
-
-impl ToStatic for usize {
-    type Static = Self;
-
-    fn to_static(&self) -> Self::Static {
-        *self
-    }
-}
-
-impl ToStatic for fsize {
-    type Static = Self;
-
-    fn to_static(&self) -> Self::Static {
-        *self
-    }
-}
-
-impl ToStatic for bool {
-    type Static = Self;
-
-    fn to_static(&self) -> Self::Static {
-        *self
-    }
-}
+impl<T> PrintSource for T where for<'a> Source<'a, T>: fmt::Display {}

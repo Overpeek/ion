@@ -12,8 +12,7 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 use crate::{
-    ast::{Assign, BinExpr, Block, Expr, Fn, FnCall, Literal, Path, Return, ReturnVoid, Stmt},
-    prelude::Module,
+    syntax::{Assign, BinExpr, Block, Expr, Fn, FnCall, Literal, Path, Return, ReturnVoid, Stmt},
     util::ToStatic,
 };
 
@@ -470,7 +469,12 @@ impl ResolveType for Path<'_> {
         }
 
         let part = self.parts.first().unwrap(); // TODO: whole path
-        let Some(ty) = res.vars.get(part.as_ref()).and_then(|stack| stack.last()).copied() else {
+        let Some(ty) = res
+            .vars
+            .get(part.as_ref())
+            .and_then(|stack| stack.last())
+            .copied()
+        else {
             return Err(IonTypeError::VariableNotAssigned);
         };
 

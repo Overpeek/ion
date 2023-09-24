@@ -20,6 +20,9 @@ owo-colors = "3.5"
 # macros
 ion-macros = { path = "../macros" }
 
+arcstr = "1.1"
+logos = "0.13"
+
 rand = "0.8"
 
 [build-dependencies]

@@ -1,7 +1,7 @@
 use inkwell::values::BasicValueEnum;
 
 use super::{Compile, Compiler};
-use crate::ast::{BinExpr, BinOp};
+use crate::syntax::{BinExpr, BinOp};
 
 //
 

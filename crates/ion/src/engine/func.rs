@@ -2,7 +2,7 @@ use inkwell::values::{BasicValueEnum, FunctionValue};
 
 use super::{Compile, Compiler};
 use crate::{
-    ast::{Fn, FnCall, Return, ReturnVoid},
+    syntax::{Fn, FnCall, Return, ReturnVoid},
     ty::{IonType, ResolveType},
 };
 
