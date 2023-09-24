@@ -5,6 +5,7 @@ use ion_core::prelude::*;
 //
 
 fn main() {
+    println!("ion new");
     let ion = Ion::new();
 
     let src = r#"
@@ -20,13 +21,16 @@ return fn() { return fn() { return 4 } }()() + 4
 // return c
 "#;
 
+    println!("ion parse");
     let mut module = ion.parse_str(src).unwrap_or_else(|err| {
         eprintln!("{}", err.pretty_print(true, src, "<src>"));
         exit(0)
     });
 
+    println!("ion to yaml");
     println!("{}", ion.to_yaml(&module));
 
+    println!("ion compile");
     let module = ion.compile_ast(&mut module).unwrap_or_else(|err| {
         eprintln!("{}", err.pretty_print(true, src, "<src>"));
         exit(0)

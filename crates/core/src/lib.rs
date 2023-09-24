@@ -82,7 +82,7 @@ impl Ion {
 
                 IonParseError::InvalidToken { location, row, col }
             }
-            ParseError::UnrecognizedEOF { location, expected } => {
+            ParseError::UnrecognizedEof { location, expected } => {
                 let (_, row, col) = err::spot_from_location(location, input)
                     .expect("Input doesn't contain the error line");
 
