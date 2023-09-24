@@ -1,6 +1,6 @@
 use std::process::exit;
 
-use ion_core::prelude::*;
+use ion::prelude::*;
 
 //
 

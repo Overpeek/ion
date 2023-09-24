@@ -1,5 +1,5 @@
 [package]
-name = "ion-core"
+name = "ion"
 version.workspace = true
 edition.workspace = true
 
