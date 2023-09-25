@@ -1,12 +1,11 @@
 use std::{cell::RefCell, collections::HashMap, mem};
 
 use arcstr::{ArcStr, Substr};
-use inkwell::{values::BasicMetadataValueEnum, AddressSpace};
 use once_cell::unsync::Lazy;
 
 use crate::syntax::{
-    BinOp, Block, Expr, FnCall, FnDef, FnExt, FnProto, Item, Let, Module, Param, ParamList, Return,
-    Stmt, Type, Value,
+    ArgList, BinOp, Block, Expr, FnCall, FnCallExt, FnDef, FnProto, Item, Let, Module, Param,
+    ParamList, Return, Stmt, Type, Value,
 };
 
 use llvm::BasicValue;
@@ -23,76 +22,14 @@ pub mod llvm {
         types::{
             AnyType, AnyTypeEnum, BasicMetadataTypeEnum, BasicType, BasicTypeEnum, FunctionType,
         },
-        values::{BasicValue, BasicValueEnum, FunctionValue},
-        OptimizationLevel,
+        values::{
+            BasicMetadataValueEnum, BasicValue, BasicValueEnum, CallSiteValue, FunctionValue,
+        },
+        AddressSpace, OptimizationLevel,
     };
 }
 
 //
-
-/* #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct ProtoNameRef<'a> {
-    base: &'a str,
-    params: &'a [Type],
-    ty: &'a Type,
-}
-
-impl<'a> ProtoNameRef<'a> {
-    pub const fn new(base: &'a str, params: &'a [Type], ty: &'a Type) -> Self {
-        Self { base, params, ty }
-    }
-}
-
-impl fmt::Display for ProtoNameRef<'_> {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let ProtoNameRef { base, params, ty } = self;
-
-        write!(f, "{base} [")?;
-
-        for param in self.params.iter().map(Type::as_str) {
-            write!(f, "{param};")?;
-        }
-
-        write!(f, "]->{}", self.ty.as_str())
-    }
-}
-
-/* impl<'a> Borrow<ProtoNameRef<'a>> for ProtoName {
-    fn borrow(&self) -> &ProtoNameRef<'a> {
-        todo!()
-    }
-} */
-
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct ProtoName {
-    base: Substr,
-    params: Rc<[Type]>,
-    ty: Type,
-}
-
-impl ProtoName {
-    pub const fn new(base: Substr, params: Rc<[Type]>, ty: Type) -> Self {
-        Self { base, params, ty }
-    }
-
-    pub fn from_fnproto(fnproto: &FnProto) -> Self {
-        Self {
-            base: fnproto.id.clone(),
-            params: fnproto.params.0.iter().map(|p| p.ty.clone()).collect(),
-            ty: fnproto.ty.clone(),
-        }
-    }
-
-    pub fn as_ref(&self) -> ProtoNameRef {
-        ProtoNameRef::new(&self.base, &self.params, &self.ty)
-    }
-}
-
-impl fmt::Display for ProtoName {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        self.as_ref().fmt(f)
-    }
-} */
 
 pub struct Engine {
     module: llvm::Module<'static>,
@@ -102,18 +39,7 @@ pub struct Engine {
 
     ee: llvm::ExecutionEngine<'static>,
 
-    fns: RefCell<HashMap<Substr, Function>>,
-}
-
-#[derive(Debug, Clone, Copy)]
-enum Function {
-    Jit {
-        func: llvm::FunctionValue<'static>,
-    },
-    Ext {
-        ty: llvm::FunctionType<'static>,
-        func: usize,
-    },
+    fns: RefCell<HashMap<Substr, llvm::FunctionValue<'static>>>,
 }
 
 impl Engine {
@@ -156,16 +82,23 @@ impl Engine {
     }
 
     pub fn add(&self, base_name: &str, ptr: fn(i32)) {
-        self.load_fnext(&FnExt {
+        let id = ArcStr::from(base_name).substr(..);
+        self.load_fndef(&FnDef {
             proto: FnProto {
-                id: ArcStr::from(base_name).into(),
+                id: id.clone(),
                 params: ParamList(vec![Param {
-                    id: ArcStr::new().into(),
+                    id: arcstr::format!("1").into(),
                     ty: Type::I32,
                 }]),
                 ty: Type::None,
             },
-            addr: ptr as usize,
+            block: Block {
+                stmts: vec![Stmt::FnCallExt(FnCallExt {
+                    id,
+                    addr: ptr as _,
+                    args: ArgList(vec![Expr::Variable(arcstr::format!("1").into())]),
+                })],
+            },
         });
 
         /* self.load_fnproto(); */
@@ -174,9 +107,7 @@ impl Engine {
     pub fn run(&self, f: &str) {
         {
             let fns = self.fns.borrow();
-            let Function::Jit { func } = fns.get(f).expect("unknown function") else {
-                panic!("shouldn't call an extern func");
-            };
+            let func = fns.get(f).expect("unknown function");
 
             if !func.verify(true) {
                 panic!("invalid function");
@@ -211,7 +142,8 @@ impl Engine {
     }
 
     pub fn load_fndef(&self, fndef: &FnDef) -> llvm::FunctionValue<'static> {
-        let proto = self.load_fndecl(&fndef.proto);
+        let fnproto = &fndef.proto;
+        let proto = self.load_fndecl(fnproto);
 
         let mut scope = Scope::new();
 
@@ -221,52 +153,41 @@ impl Engine {
             .append_basic_block(proto, "fn-entry");
         self.builder.position_at_end(entry);
 
-        for (arg, param) in proto.get_param_iter().zip(fndef.proto.params.0.iter()) {
+        for (arg, param) in proto.get_param_iter().zip(fnproto.params.0.iter()) {
             scope.assign(param.id.clone(), arg);
         }
 
         self.load_block(&fndef.block, &mut scope);
-
         self.load_return(&Return(None), &mut scope);
 
         proto
     }
 
     pub fn load_fndecl(&self, fnproto: &FnProto) -> llvm::FunctionValue<'static> {
-        let (name, ty) = self.load_fnproto_ty(fnproto);
-        let proto = self.module.add_function(&name, ty, None);
+        let proto = self.load_fnproto(fnproto);
+
+        self.fns.borrow_mut().insert(fnproto.id.clone(), proto);
+
+        proto
+    }
+
+    pub fn load_fnproto(&self, fnproto: &FnProto) -> llvm::FunctionValue<'static> {
+        let FnProto { id, params, ty } = fnproto;
+
+        // let name = ProtoName::from_fnproto(fnproto);
+        // let name_str = format!("{}", ProtoName::from_fnproto(fnproto));
+        let name = &id;
+        // println!("proto: `{name}`");
+
+        let ty = Self::load_fntype(ty, params.0.iter().map(|p| &p.ty));
+
+        let proto = self.module.add_function(name, ty, None);
 
         for (arg, param) in proto.get_param_iter().zip(fnproto.params.0.iter()) {
             arg.set_name(&param.id);
         }
 
-        self.fns
-            .borrow_mut()
-            .insert(name, Function::Jit { func: proto });
-
         proto
-    }
-
-    pub fn load_fnext(&self, fnext: &FnExt) {
-        let (name, ty) = self.load_fnproto_ty(&fnext.proto);
-        let func = fnext.addr;
-
-        self.fns
-            .borrow_mut()
-            .insert(name, Function::Ext { ty, func });
-    }
-
-    pub fn load_fnproto_ty(&self, fnproto: &FnProto) -> (Substr, llvm::FunctionType<'static>) {
-        let FnProto { id, params, ty } = fnproto;
-
-        // let name = ProtoName::from_fnproto(fnproto);
-        // let name_str = format!("{}", ProtoName::from_fnproto(fnproto));
-        let name = id.clone();
-        // println!("proto: `{name}`");
-
-        let ty = Self::load_fntype(ty.clone(), params.0.iter().map(|p| &p.ty));
-
-        (name, ty)
     }
 
     pub fn load_block(&self, block: &Block, scope: &mut Scope) {
@@ -276,7 +197,7 @@ impl Engine {
     }
 
     pub fn load_fntype<'a>(
-        ty: Type,
+        ty: &Type,
         param_types: impl Iterator<Item = &'a Type>,
     ) -> llvm::FunctionType<'static> {
         let param_types: Vec<llvm::BasicMetadataTypeEnum> =
@@ -304,6 +225,7 @@ impl Engine {
             Stmt::Return(ret) => self.load_return(ret, scope),
             Stmt::Let(r#let) => self.load_let(r#let, scope),
             Stmt::FnCall(fncall) => _ = self.load_fncall(fncall, scope),
+            Stmt::FnCallExt(fncallext) => _ = self.load_fncallext(fncallext, scope),
         }
     }
 
@@ -322,29 +244,52 @@ impl Engine {
     pub fn load_fncall(&self, fncall: &FnCall, scope: &mut Scope) -> llvm::BasicValueEnum<'static> {
         let func = *self.fns.borrow().get(&fncall.id).expect("unknown function");
 
-        let args: Vec<BasicMetadataValueEnum> = fncall
+        let args: Vec<llvm::BasicMetadataValueEnum> = fncall
             .args
             .0
             .iter()
             .map(|expr| self.load_expr(expr, scope).into())
             .collect();
 
-        let call = match func {
-            Function::Jit { func } => self.builder.build_call(func, &args, "fncall-jit"),
-            Function::Ext { ty, func } => {
-                let int_ty = get_ctx().ptr_sized_int_type(&self.ee.get_target_data(), None);
+        let call = self.builder.build_call(func, &args, "fncall-jit");
 
-                let func = self.builder.build_int_to_ptr(
-                    int_ty.const_int(func as _, false),
-                    int_ty.ptr_type(AddressSpace::default()),
-                    "tmp-int-to-ptr",
-                );
+        Self::process_call_value(call)
+    }
 
-                self.builder
-                    .build_indirect_call(ty, func, &args, "fncall-ext")
-            }
-        };
+    pub fn load_fncallext(
+        &self,
+        fncallext: &FnCallExt,
+        scope: &mut Scope,
+    ) -> llvm::BasicValueEnum<'static> {
+        let ty = self
+            .fns
+            .borrow()
+            .get(&fncallext.id)
+            .expect("unknown function")
+            .get_type();
 
+        let args: Vec<llvm::BasicMetadataValueEnum> = fncallext
+            .args
+            .0
+            .iter()
+            .map(|expr| self.load_expr(expr, scope).into())
+            .collect();
+
+        let int_ty = get_ctx().ptr_sized_int_type(&self.ee.get_target_data(), None);
+        let func = self.builder.build_int_to_ptr(
+            int_ty.const_int(fncallext.addr as _, false),
+            int_ty.ptr_type(llvm::AddressSpace::default()),
+            "tmp-int-to-ptr",
+        );
+
+        let call = self
+            .builder
+            .build_indirect_call(ty, func, &args, "fncall-ext");
+
+        Self::process_call_value(call)
+    }
+
+    fn process_call_value(call: llvm::CallSiteValue<'static>) -> llvm::BasicValueEnum<'static> {
         if let Some(val) = call.try_as_basic_value().left() {
             val
         } else {
@@ -392,6 +337,7 @@ impl Engine {
             }
             Expr::Variable(v) => scope.get(v),
             Expr::FnCall(fncall) => self.load_fncall(fncall, scope),
+            Expr::FnCallExt(fncallext) => self.load_fncallext(fncallext, scope),
         }
     }
 }

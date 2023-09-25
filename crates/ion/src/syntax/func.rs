@@ -48,12 +48,6 @@ impl fmt::Display for Source<'_, FnDef> {
 }
 
 #[derive(Debug, Clone)]
-pub struct FnExt {
-    pub proto: FnProto,
-    pub addr: usize,
-}
-
-#[derive(Debug, Clone)]
 pub struct ParamList(pub Vec<Param>);
 
 impl fmt::Display for Source<'_, ParamList> {
@@ -148,5 +142,21 @@ impl fmt::Display for Source<'_, ArgList> {
         }
 
         Ok(())
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct FnCallExt {
+    pub id: Substr,
+    pub addr: usize,
+    pub args: ArgList,
+}
+
+impl fmt::Display for Source<'_, FnCallExt> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let FnCallExt { id, addr, args } = self.inner;
+        let args = args.as_source(self.indent);
+
+        write!(f, "__ion_fncallext_{id}_{addr}({args})")
     }
 }

@@ -4,7 +4,7 @@ use arcstr::Substr;
 
 use crate::util::{PrintSource, Source};
 
-use super::FnCall;
+use super::{FnCall, FnCallExt};
 
 //
 
@@ -17,6 +17,7 @@ pub enum Expr {
     Variable(Substr),
 
     FnCall(FnCall),
+    FnCallExt(FnCallExt),
 }
 
 impl fmt::Display for Source<'_, Expr> {
@@ -31,6 +32,7 @@ impl fmt::Display for Source<'_, Expr> {
             Expr::Value(v) => v.as_source(self.indent).fmt(f),
             Expr::Variable(v) => write!(f, "{v}"),
             Expr::FnCall(v) => v.as_source(self.indent).fmt(f),
+            Expr::FnCallExt(v) => v.as_source(self.indent).fmt(f),
         }
     }
 }
