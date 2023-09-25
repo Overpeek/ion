@@ -2,7 +2,7 @@ use std::fmt;
 
 use crate::util::{PrintSource, Source};
 
-use super::{Expr, FnCall, FnCallExt, Let};
+use super::{Assign, Expr, FnCall, FnCallExt, Let};
 
 //
 
@@ -10,6 +10,7 @@ use super::{Expr, FnCall, FnCallExt, Let};
 pub enum Stmt {
     Return(Return),
     Let(Let),
+    Assign(Assign),
     FnCall(FnCall),
     FnCallExt(FnCallExt),
     // Expr(Expr),
@@ -20,6 +21,7 @@ impl fmt::Display for Source<'_, Stmt> {
         match self.inner {
             Stmt::Return(v) => v.as_source(self.indent).fmt(f),
             Stmt::Let(v) => v.as_source(self.indent).fmt(f),
+            Stmt::Assign(v) => v.as_source(self.indent).fmt(f),
             Stmt::FnCall(v) => v.as_source(self.indent).fmt(f),
             Stmt::FnCallExt(v) => v.as_source(self.indent).fmt(f),
         }

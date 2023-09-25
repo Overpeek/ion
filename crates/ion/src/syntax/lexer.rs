@@ -53,8 +53,6 @@ pub enum Token {
     Lbracket,
     #[token("]")]
     Rbracket,
-    #[token("=")]
-    Assign,
     #[token(",")]
     Comma,
     #[token(";")]
@@ -70,6 +68,17 @@ pub enum Token {
     OpMul,
     #[token("/")]
     OpDiv,
+
+    #[token("=")]
+    Assign,
+    #[token("+=")]
+    AddAssign,
+    #[token("-=")]
+    SubAssign,
+    #[token("*=")]
+    MulAssign,
+    #[token("/=")]
+    DivAssign,
 }
 
 impl fmt::Display for Token {

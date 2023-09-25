@@ -4,8 +4,8 @@ use arcstr::{ArcStr, Substr};
 use once_cell::unsync::Lazy;
 
 use crate::syntax::{
-    ArgList, BinOp, Block, Expr, FnCall, FnCallExt, FnDef, FnProto, Item, Let, Module, Param,
-    ParamList, Return, Stmt, Type, Value,
+    ArgList, Assign, AssignOp, BinOp, Block, Expr, FnCall, FnCallExt, FnDef, FnProto, Item, Let,
+    Module, Param, ParamList, Return, Stmt, Type, Value,
 };
 
 use llvm::BasicValue;
@@ -14,6 +14,7 @@ use llvm::BasicValue;
 
 pub mod llvm {
     pub use inkwell::{
+        basic_block::BasicBlock,
         builder::Builder,
         context::Context,
         execution_engine::ExecutionEngine,
@@ -24,6 +25,7 @@ pub mod llvm {
         },
         values::{
             BasicMetadataValueEnum, BasicValue, BasicValueEnum, CallSiteValue, FunctionValue,
+            PointerValue,
         },
         AddressSpace, OptimizationLevel,
     };
@@ -105,24 +107,13 @@ impl Engine {
     }
 
     pub fn run(&self, f: &str) {
-        {
-            let fns = self.fns.borrow();
-            let func = fns.get(f).expect("unknown function");
-
-            if !func.verify(true) {
-                panic!("invalid function");
-            }
-
-            self.fpm.run_on(func);
-        }
+        // TODO: validate
 
         let start = unsafe {
             self.ee
                 .get_function::<unsafe extern "C" fn() -> ()>(f)
                 .unwrap()
         };
-
-        self.module.strip_debug_info();
 
         unsafe {
             start.call();
@@ -145,20 +136,30 @@ impl Engine {
         let fnproto = &fndef.proto;
         let proto = self.load_fndecl(fnproto);
 
-        let mut scope = Scope::new();
-
         let entry = self
             .module
             .get_context()
             .append_basic_block(proto, "fn-entry");
         self.builder.position_at_end(entry);
 
+        let mut scope = Scope::new(entry);
+
         for (arg, param) in proto.get_param_iter().zip(fnproto.params.0.iter()) {
-            scope.assign(param.id.clone(), arg);
+            let ty = arg.get_type();
+            let ptr = self.entry_var_alloca(&param.id, ty, &scope);
+            self.builder.build_store(ptr, arg);
+
+            scope.set(param.id.clone(), (ty, ptr));
         }
 
         self.load_block(&fndef.block, &mut scope);
         self.load_return(&Return(None), &mut scope);
+
+        if !proto.verify(true) {
+            panic!("invalid function");
+        }
+
+        self.fpm.run_on(&proto);
 
         proto
     }
@@ -201,7 +202,7 @@ impl Engine {
         param_types: impl Iterator<Item = &'a Type>,
     ) -> llvm::FunctionType<'static> {
         let param_types: Vec<llvm::BasicMetadataTypeEnum> =
-            param_types.map(Self::load_type).collect();
+            param_types.map(|t| Self::type_enum(t).into()).collect();
 
         let ctx = get_ctx();
         match ty {
@@ -211,19 +212,11 @@ impl Engine {
         }
     }
 
-    pub fn load_type(ty: &Type) -> llvm::BasicMetadataTypeEnum<'static> {
-        let ctx = get_ctx();
-        match ty {
-            Type::I32 => ctx.i32_type().into(),
-            Type::F32 => ctx.f32_type().into(),
-            Type::None => ctx.struct_type(&[], false).into(),
-        }
-    }
-
     pub fn load_stmt(&self, stmt: &Stmt, scope: &mut Scope) {
         match stmt {
             Stmt::Return(ret) => self.load_return(ret, scope),
             Stmt::Let(r#let) => self.load_let(r#let, scope),
+            Stmt::Assign(assign) => self.load_assign(assign, scope),
             Stmt::FnCall(fncall) => _ = self.load_fncall(fncall, scope),
             Stmt::FnCallExt(fncallext) => _ = self.load_fncallext(fncallext, scope),
         }
@@ -238,7 +231,36 @@ impl Engine {
 
     pub fn load_let(&self, r#let: &Let, scope: &mut Scope) {
         let val = self.load_expr(&r#let.expr, scope);
-        scope.assign(r#let.id.clone(), val);
+
+        let ty = val.get_type();
+        let ptr = self.entry_var_alloca(&r#let.id, ty, scope);
+        self.builder.build_store(ptr, val);
+
+        scope.set(r#let.id.clone(), (ty, ptr));
+    }
+
+    pub fn load_assign(&self, assign: &Assign, scope: &mut Scope) {
+        let val = self.load_expr(&assign.expr, scope);
+
+        let (ty, ptr) = scope.get(&assign.id);
+        assert_eq!(val.get_type(), ty);
+
+        let val = 'op: {
+            let op = match assign.op {
+                AssignOp::Assign => {
+                    break 'op val;
+                }
+                AssignOp::Add => BinOp::Add,
+                AssignOp::Sub => BinOp::Sub,
+                AssignOp::Mul => BinOp::Mul,
+                AssignOp::Div => BinOp::Div,
+            };
+
+            let target = self.builder.build_load(ty, ptr, "tmp-assign-load");
+            self.load_binexpr(target, val, op)
+        };
+
+        self.builder.build_store(ptr, val);
     }
 
     pub fn load_fncall(&self, fncall: &FnCall, scope: &mut Scope) -> llvm::BasicValueEnum<'static> {
@@ -275,7 +297,7 @@ impl Engine {
             .map(|expr| self.load_expr(expr, scope).into())
             .collect();
 
-        let int_ty = get_ctx().ptr_sized_int_type(&self.ee.get_target_data(), None);
+        let int_ty = get_ctx().ptr_sized_int_type(self.ee.get_target_data(), None);
         let func = self.builder.build_int_to_ptr(
             int_ty.const_int(fncallext.addr as _, false),
             int_ty.ptr_type(llvm::AddressSpace::default()),
@@ -289,6 +311,90 @@ impl Engine {
         Self::process_call_value(call)
     }
 
+    pub fn load_expr(&self, expr: &Expr, scope: &mut Scope) -> llvm::BasicValueEnum<'static> {
+        match expr {
+            Expr::BinExpr { sides, op } => {
+                let lhs = self.load_expr(&sides.0, scope);
+                let rhs = self.load_expr(&sides.1, scope);
+
+                self.load_binexpr(lhs, rhs, *op)
+            }
+            Expr::Value(value) => self.load_value(value),
+            Expr::Variable(variable) => self.load_variable(variable, scope),
+            Expr::FnCall(fncall) => self.load_fncall(fncall, scope),
+            Expr::FnCallExt(fncallext) => self.load_fncallext(fncallext, scope),
+        }
+    }
+
+    pub fn load_binexpr(
+        &self,
+        lhs: llvm::BasicValueEnum<'static>,
+        rhs: llvm::BasicValueEnum<'static>,
+        op: BinOp,
+    ) -> llvm::BasicValueEnum<'static> {
+        match (lhs, rhs, op) {
+            (
+                llvm::BasicValueEnum::IntValue(lhs),
+                llvm::BasicValueEnum::IntValue(rhs),
+                BinOp::Add,
+            ) => self
+                .builder
+                .build_int_add(lhs, rhs, "int-add")
+                .as_basic_value_enum(),
+
+            (
+                llvm::BasicValueEnum::IntValue(lhs),
+                llvm::BasicValueEnum::IntValue(rhs),
+                BinOp::Sub,
+            ) => self
+                .builder
+                .build_int_sub(lhs, rhs, "int-sub")
+                .as_basic_value_enum(),
+
+            (
+                llvm::BasicValueEnum::IntValue(lhs),
+                llvm::BasicValueEnum::IntValue(rhs),
+                BinOp::Mul,
+            ) => self
+                .builder
+                .build_int_mul(lhs, rhs, "int-mul")
+                .as_basic_value_enum(),
+
+            (
+                llvm::BasicValueEnum::IntValue(lhs),
+                llvm::BasicValueEnum::IntValue(rhs),
+                BinOp::Div,
+            ) => self
+                .builder
+                .build_int_signed_div(lhs, rhs, "int-div")
+                .as_basic_value_enum(),
+
+            (lhs, rhs, op) => {
+                panic!("cannot eval `{op:?}` with `{lhs}` and `{rhs}`");
+            }
+        }
+    }
+
+    pub fn load_value(&self, value: &Value) -> llvm::BasicValueEnum<'static> {
+        let ctx = get_ctx();
+        match value {
+            Value::Int(v) => ctx
+                .i32_type()
+                .const_int(unsafe { mem::transmute_copy::<i64, u64>(v) }, true)
+                .as_basic_value_enum(),
+            Value::Float(v) => ctx.f32_type().const_float(*v).as_basic_value_enum(),
+            Value::Bool(v) => ctx
+                .bool_type()
+                .const_int(*v as u64, false)
+                .as_basic_value_enum(),
+        }
+    }
+
+    pub fn load_variable(&self, variable: &str, scope: &Scope) -> llvm::BasicValueEnum<'static> {
+        let (ty, ptr) = scope.get(variable);
+        self.builder.build_load(ty, ptr, "tmp-load")
+    }
+
     fn process_call_value(call: llvm::CallSiteValue<'static>) -> llvm::BasicValueEnum<'static> {
         if let Some(val) = call.try_as_basic_value().left() {
             val
@@ -300,44 +406,32 @@ impl Engine {
         }
     }
 
-    pub fn load_expr(&self, expr: &Expr, scope: &mut Scope) -> llvm::BasicValueEnum<'static> {
-        match expr {
-            Expr::BinExpr { sides, op } => {
-                let lhs = self.load_expr(&sides.0, scope);
-                let rhs = self.load_expr(&sides.1, scope);
+    fn entry_var_alloca(
+        &self,
+        name: &str,
+        // ty: &Type,
+        ty: llvm::BasicTypeEnum<'static>,
+        scope: &Scope,
+    ) -> llvm::PointerValue<'static> {
+        // TODO: reuse
+        let builder = self.module.get_context().create_builder();
 
-                match (lhs, rhs, op) {
-                    (
-                        llvm::BasicValueEnum::IntValue(lhs),
-                        llvm::BasicValueEnum::IntValue(rhs),
-                        BinOp::Add,
-                    ) => self
-                        .builder
-                        .build_int_add(lhs, rhs, "int-add")
-                        .as_basic_value_enum(),
+        if let Some(first) = scope.entry.get_first_instruction() {
+            builder.position_before(&first);
+        } else {
+            builder.position_at_end(scope.entry);
+        }
 
-                    (lhs, rhs, op) => {
-                        panic!("cannot eval `{op:?}` with `{lhs}` and `{rhs}`");
-                    }
-                }
-            }
-            Expr::Value(v) => {
-                let ctx = get_ctx();
-                match v {
-                    Value::Int(v) => ctx
-                        .i32_type()
-                        .const_int(unsafe { mem::transmute_copy::<i64, u64>(v) }, true)
-                        .as_basic_value_enum(),
-                    Value::Float(v) => ctx.f32_type().const_float(*v).as_basic_value_enum(),
-                    Value::Bool(v) => ctx
-                        .bool_type()
-                        .const_int(*v as u64, false)
-                        .as_basic_value_enum(),
-                }
-            }
-            Expr::Variable(v) => scope.get(v),
-            Expr::FnCall(fncall) => self.load_fncall(fncall, scope),
-            Expr::FnCallExt(fncallext) => self.load_fncallext(fncallext, scope),
+        println!("build alloca `{name}`");
+        builder.build_alloca(ty, /* Self::type_enum(ty) */ name)
+    }
+
+    fn type_enum(ty: &Type) -> llvm::BasicTypeEnum<'static> {
+        let ctx = get_ctx();
+        match ty {
+            Type::I32 => ctx.i32_type().into(),
+            Type::F32 => ctx.f32_type().into(),
+            Type::None => ctx.struct_type(&[], false).into(),
         }
     }
 }
@@ -349,12 +443,16 @@ impl Default for Engine {
 }
 
 pub struct Scope {
+    entry: llvm::BasicBlock<'static>,
     vars: Vec<Vec<Var>>,
 }
 
 impl Scope {
-    pub const fn new() -> Self {
-        Self { vars: vec![] }
+    pub fn new(entry: llvm::BasicBlock<'static>) -> Self {
+        Self {
+            entry,
+            vars: vec![],
+        }
     }
 
     pub fn push(&mut self) {
@@ -365,13 +463,16 @@ impl Scope {
         self.vars.pop();
     }
 
-    pub fn assign(&mut self, id: Substr, val: llvm::BasicValueEnum<'static>) {
+    pub fn set(
+        &mut self,
+        id: Substr,
+        val: (llvm::BasicTypeEnum<'static>, llvm::PointerValue<'static>),
+    ) {
         let last = self.last_mut();
-
         last.push(Var { id, val });
     }
 
-    pub fn set(&mut self, id: &str, val: llvm::BasicValueEnum<'static>) {
+    /* pub fn assign(&mut self, id: &str, val: llvm::BasicValueEnum<'static>) {
         self.vars
             .iter_mut()
             .flat_map(|v| v.iter_mut())
@@ -379,9 +480,9 @@ impl Scope {
             .find(|var| var.id == id)
             .expect("variable not found")
             .val = val;
-    }
+    } */
 
-    pub fn get(&self, id: &str) -> llvm::BasicValueEnum<'static> {
+    pub fn get(&self, id: &str) -> (llvm::BasicTypeEnum<'static>, llvm::PointerValue<'static>) {
         self.vars
             .iter()
             .flat_map(|v| v.iter())
@@ -402,7 +503,7 @@ impl Scope {
 
 struct Var {
     id: Substr,
-    val: llvm::BasicValueEnum<'static>,
+    val: (llvm::BasicTypeEnum<'static>, llvm::PointerValue<'static>),
 }
 
 //

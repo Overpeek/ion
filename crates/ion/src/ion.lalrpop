@@ -26,7 +26,6 @@ extern {
         "}" => Token::Rbrace,
         "[" => Token::Lbracket,
         "]" => Token::Rbracket,
-        "=" => Token::Assign,
         "," => Token::Comma,
         ";" => Token::Semi,
         ":" => Token::Colon,
@@ -35,6 +34,12 @@ extern {
         "-" => Token::OpSub,
         "*" => Token::OpMul,
         "/" => Token::OpDiv,
+
+        "=" => Token::Assign,
+        "+=" => Token::AddAssign,
+        "-=" => Token::SubAssign,
+        "*=" => Token::MulAssign,
+        "/=" => Token::DivAssign,
     }
 }
 
@@ -96,6 +101,7 @@ pub Chunk: Block = {
 pub Stmt: Stmt = {
     Return => Stmt::Return(<>),
     Let => Stmt::Let(<>),
+    Assign => Stmt::Assign(<>),
     FnCall => Stmt::FnCall(<>),
     // Expr => Stmt::Expr(<>),
 };
@@ -109,6 +115,22 @@ pub Let: Let = {
         id,
         expr,
     },
+};
+
+pub Assign: Assign = {
+    <id:"ident"> <op:AssignOp> <expr:Expr> => Assign {
+        id,
+        op,
+        expr,
+    },
+};
+
+pub AssignOp: AssignOp = {
+    "=" => AssignOp::Assign,
+    "+=" => AssignOp::Add,
+    "-=" => AssignOp::Sub,
+    "*=" => AssignOp::Mul,
+    "/=" => AssignOp::Div,
 };
 
 pub Expr: Expr = {
