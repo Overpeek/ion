@@ -21,6 +21,7 @@ fn main(): none {
 // optionally fully type-inferred
 fn add(l, r) {
     // undecided: optional semicolons
+    // limited syntax
     l + r
 }
 
