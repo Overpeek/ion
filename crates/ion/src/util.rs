@@ -47,6 +47,26 @@ where
     }
 }
 
+impl<I: Iterator> Display for IterList<I>
+where
+    I::Item: Display,
+    I: Clone,
+{
+    fn fmt(&self, f: &mut Formatter) -> Result {
+        struct DisplayToDebug<T>(T);
+
+        impl<T: Display> Debug for DisplayToDebug<T> {
+            fn fmt(&self, f: &mut Formatter) -> Result {
+                self.0.fmt(f)
+            }
+        }
+
+        f.debug_list()
+            .entries(self.0.clone().map(DisplayToDebug))
+            .finish()
+    }
+}
+
 impl<'a, I: ExactSizeIterator> IterDisplay<'a, I> {
     pub fn new(
         iter: I,

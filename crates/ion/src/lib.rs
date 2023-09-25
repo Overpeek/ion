@@ -1,6 +1,7 @@
 use lalrpop_util::{lalrpop_mod, ParseError};
 
 use self::{
+    engine::Engine,
     err::{IonError, IonResult},
     ion::ModuleParser,
     syntax::{lexer::Lexer, Module},
@@ -10,7 +11,7 @@ use crate::{err::IonParseError, util::PrintSource};
 //
 
 lalrpop_mod!(pub ion);
-// pub mod engine;
+pub mod engine;
 pub mod err;
 pub mod syntax;
 // pub mod ty;
@@ -21,6 +22,7 @@ mod util;
 /// Ion parser, interpreter and compiler
 pub struct State {
     parser: ModuleParser,
+    engine: Engine,
 }
 
 //
@@ -29,7 +31,12 @@ impl State {
     pub fn new() -> Self {
         Self {
             parser: ModuleParser::new(),
+            engine: Engine::new(),
         }
+    }
+
+    pub fn add(&self, base_name: &str, ptr: fn(i32)) {
+        self.engine.add(base_name, ptr);
     }
 
     pub fn run(&self, input: &str) -> IonResult<()> {

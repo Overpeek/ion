@@ -52,11 +52,17 @@ pub Item: Item = {
 };
 
 pub FnDef: FnDef = {
-    "fn" <id:"ident"> "(" <params:ParamList> ")" <ty: (":" <Type>)> <block:Block> => FnDef {
+    <proto:FnProto> <block:Block> => FnDef {
+        proto,
+        block,
+    },
+};
+
+pub FnProto: FnProto = {
+    "fn" <id:"ident"> "(" <params:ParamList> ")" <ty: (":" <Type>)> => FnProto {
         id,
         params,
         ty,
-        block,
     },
 };
 

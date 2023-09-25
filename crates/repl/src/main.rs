@@ -6,6 +6,8 @@ use ion::State;
 
 fn main() {
     let src = r#"
+fn print()
+
 fn add(lhs: i32, rhs: i32): i32 {
     return lhs + rhs
 }
@@ -21,6 +23,10 @@ fn main(): none {
 "#;
 
     let state = State::new();
+
+    state.add("print", |v: i32| {
+        println!("{v}");
+    });
 
     state.run(src).unwrap_or_else(|err| {
         eprintln!("{}", err.pretty_print(true, src, "<src>"));
