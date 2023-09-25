@@ -6,20 +6,21 @@ use ion::State;
 
 fn main() {
     let src = r#"
-fn print()
+        print(4);
 
-fn add(lhs: i32, rhs: i32): i32 {
-    return lhs + rhs
+/* fn add(lhs: i32, rhs: i32): i32 {
+    let x = lhs + rhs;
+    return x
 }
 
-/* fn add<T>(lhs: T, rhs: T): T {
-    return lhs + rhs
-} */
+// fn add<T>(lhs: T, rhs: T): T {
+//     return lhs + rhs
+// }
 
 fn main(): none {
     let a = 4
     print(add(a, 5))
-}
+} */
 "#;
 
     let state = State::new();
@@ -30,8 +31,10 @@ fn main(): none {
 
     state.run(src).unwrap_or_else(|err| {
         eprintln!("{}", err.pretty_print(true, src, "<src>"));
-        exit(0)
+        exit(1)
     });
+
+    println!("\n==[[ IR  ]]==\n{}\n==[[ END ]]==", state.dump_ir());
 
     /* let mut module = ion.parse_str(src).unwrap_or_else(|err| {
         eprintln!("{}", err.pretty_print(true, src, "<src>"));

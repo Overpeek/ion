@@ -1,12 +1,24 @@
+use std::{
+    cell::RefCell,
+    sync::atomic::{AtomicUsize, Ordering},
+};
+
 use lalrpop_util::{lalrpop_mod, ParseError};
 
 use self::{
     engine::Engine,
     err::{IonError, IonResult},
-    ion::ModuleParser,
-    syntax::{lexer::Lexer, Module},
+    ion::{ChunkParser, ModuleParser},
+    syntax::{
+        lexer::{Lexer, Token},
+        FnDef, FnProto, Module,
+    },
 };
-use crate::{err::IonParseError, util::PrintSource};
+use crate::{
+    err::IonParseError,
+    syntax::{Item, ParamList, Type},
+    util::PrintSource,
+};
 
 //
 
@@ -21,8 +33,12 @@ mod util;
 
 /// Ion parser, interpreter and compiler
 pub struct State {
-    parser: ModuleParser,
+    module_parser: ModuleParser,
+    chunk_parser: ChunkParser,
+
     engine: Engine,
+
+    src: RefCell<Module>,
 }
 
 //
@@ -30,8 +46,14 @@ pub struct State {
 impl State {
     pub fn new() -> Self {
         Self {
-            parser: ModuleParser::new(),
+            module_parser: ModuleParser::new(),
+            chunk_parser: ChunkParser::new(),
             engine: Engine::new(),
+
+            src: RefCell::new(Module {
+                src_files: vec![],
+                items: vec![],
+            }),
         }
     }
 
@@ -39,15 +61,62 @@ impl State {
         self.engine.add(base_name, ptr);
     }
 
-    pub fn run(&self, input: &str) -> IonResult<()> {
-        let mut ast = self.parse_str_inner(input)?;
-        ast.source_file = Some(arcstr::literal!("<src>"));
+    pub fn include_module(&self, input: &str) -> IonResult<()> {
+        let mut errors = vec![];
 
-        let src = ast.as_source(0);
+        let mut module = self
+            .module_parser
+            .parse(&mut errors, Lexer::new(input))
+            .map_err(|err| Self::map_err(input, err, &errors))?;
 
-        println!("{src}");
+        module.src_files.push(arcstr::literal!("<src>"));
+
+        self.engine.load_module(&module);
+        self.src.borrow_mut().extend(module);
 
         Ok(())
+    }
+
+    pub fn run(&self, input: &str) -> IonResult<()> {
+        let mut errors = vec![];
+
+        let chunk = self
+            .chunk_parser
+            .parse(&mut errors, Lexer::new(input))
+            .map_err(|err| Self::map_err(input, err, &errors))?;
+
+        static N: AtomicUsize = AtomicUsize::new(0);
+        let id = arcstr::format!("__ion_immediate_run_{}", N.fetch_add(1, Ordering::Relaxed));
+
+        let fndef = FnDef {
+            proto: FnProto {
+                id: id.substr(..),
+                params: ParamList(vec![]),
+                ty: Type::None,
+            },
+            block: chunk,
+        };
+
+        self.engine.load_fndef(&fndef);
+        self.src.borrow_mut().items.push(Item::FnDef(fndef));
+
+        self.engine.run(&id);
+
+        Ok(())
+    }
+
+    /* pub fn run(&self, f: &str) {
+        self.engine.run(f);
+    } */
+
+    pub fn dump_src(&self) -> String {
+        let src = self.src.borrow();
+        let src = src.as_source(0);
+        format!("{src}")
+    }
+
+    pub fn dump_ir(&self) -> String {
+        self.engine.dump_ir()
     }
 
     /* pub fn parse_str<'i>(&self, input: &'i str) -> IonResult<Module<'i>> {
@@ -77,14 +146,7 @@ impl State {
         serde_yaml::to_string(&ast).unwrap()
     } */
 
-    fn parse_str_inner(&self, input: &str) -> IonResult<Module> {
-        let mut errors = vec![];
-
-        let err = match self.parser.parse(&mut errors, Lexer::new(input)) {
-            Ok(module) => return Ok(module),
-            Err(err) => err,
-        };
-
+    fn map_err(input: &str, err: ParseError<usize, Token, String>, _errors: &[String]) -> IonError {
         let err = match err {
             ParseError::InvalidToken { location } => {
                 let (_, row, col) = err::spot_from_location(location, input)
@@ -131,7 +193,7 @@ impl State {
             ParseError::User { error } => IonParseError::Other { msg: error },
         };
 
-        Err(IonError::Parse(err))
+        IonError::Parse(err)
     }
 }
 

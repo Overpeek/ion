@@ -41,8 +41,8 @@ extern {
 //
 
 pub Module: Module = {
-    <items: (<Item>)*> => Module {
-        source_file: None,
+    ";"* <items: (<Item> ";"+)*> => Module {
+        src_files: vec![],
         items
     },
 };
@@ -84,7 +84,11 @@ pub Type: Type = {
 };
 
 pub Block: Block = {
-    "{" ";"* <stmts: (<Stmt> ";"*)*> "}" => Block {
+    "{" <Chunk> "}",
+};
+
+pub Chunk: Block = {
+    ";"* <stmts: (<Stmt> ";"+)*> => Block {
         stmts
     }
 };
@@ -97,7 +101,7 @@ pub Stmt: Stmt = {
 };
 
 pub Return: Return = {
-    "return" <Expr> => Return(<>),
+    "return" <Expr?> => Return(<>),
 };
 
 pub Let: Let = {

@@ -48,6 +48,12 @@ impl fmt::Display for Source<'_, FnDef> {
 }
 
 #[derive(Debug, Clone)]
+pub struct FnExt {
+    pub proto: FnProto,
+    pub addr: usize,
+}
+
+#[derive(Debug, Clone)]
 pub struct ParamList(pub Vec<Param>);
 
 impl fmt::Display for Source<'_, ParamList> {

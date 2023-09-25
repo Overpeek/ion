@@ -25,11 +25,15 @@ impl fmt::Display for Source<'_, Stmt> {
 }
 
 #[derive(Debug, Clone)]
-pub struct Return(pub Expr);
+pub struct Return(pub Option<Expr>);
 
 impl fmt::Display for Source<'_, Return> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let expr = self.inner.0.as_source(self.indent);
-        write!(f, "return {expr}")
+        if let Some(expr) = self.inner.0.as_ref() {
+            let expr = expr.as_source(self.indent);
+            write!(f, "return {expr}")
+        } else {
+            write!(f, "return")
+        }
     }
 }

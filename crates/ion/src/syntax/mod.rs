@@ -22,17 +22,25 @@ pub mod lexer;
 /// Source file contents
 #[derive(Debug, Clone)]
 pub struct Module {
-    pub source_file: Option<ArcStr>,
+    pub src_files: Vec<ArcStr>,
     pub items: Vec<Item>,
+}
+
+impl Module {
+    pub fn extend(&mut self, rhs: Module) -> &mut Self {
+        self.src_files.extend(rhs.src_files);
+        self.items.extend(rhs.items);
+        self
+    }
 }
 
 impl fmt::Display for Source<'_, Module> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        if let Some(source_file) = self.inner.source_file.as_ref() {
-            writeln!(f, "// !src_file={source_file}\n")?;
-        }
+        let Module { src_files, items } = self.inner;
 
-        for item in self.inner.items.iter() {
+        writeln!(f, "// !src_file(s)={src_files:?}\n")?;
+
+        for item in items.iter() {
             writeln!(f, "{}\n", item.as_source(self.indent))?;
         }
 
