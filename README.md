@@ -17,9 +17,10 @@ fn main(): none {
 }
 
 // todo:
+
 // optionally fully type-inferred
 fn add(l, r) {
-    // optional semicolons
+    // undecided: optional semicolons
     l + r
 }
 
@@ -42,9 +43,7 @@ fn captures() {
 }
 captures()
 
-// undecided:
-
-// partial eval using captures
+// undecided: partial eval using captures
 // not very readable?
 let add_5 = add(5)
 ```
