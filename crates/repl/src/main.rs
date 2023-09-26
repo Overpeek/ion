@@ -1,6 +1,6 @@
 use std::process::exit;
 
-use ion::State;
+use ion::{OptLevel, State};
 
 //
 
@@ -14,13 +14,18 @@ fn main() {
         print(x);
         x *= 5;
         print(x);
-        let c = true;
-        if (c) {
-            print(42);
+        if (true) {
+            if (true) {
+                print(42);
+            };
         };
     "#;
 
-    let state = State::new();
+    let lvl = OptLevel::High;
+    // let lvl = OptLevel::Medium;
+    // let lvl = OptLevel::Low;
+    // let lvl = OptLevel::None;
+    let state = State::new().with_opt_level(lvl);
 
     state.add("print", |v: i32| {
         println!("{v}");

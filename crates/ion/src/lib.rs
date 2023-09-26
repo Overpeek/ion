@@ -41,6 +41,15 @@ pub struct State {
     src: RefCell<Module>,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum OptLevel {
+    High,
+    #[default]
+    Medium,
+    Low,
+    None,
+}
+
 //
 
 impl State {
@@ -48,13 +57,22 @@ impl State {
         Self {
             module_parser: ModuleParser::new(),
             chunk_parser: ChunkParser::new(),
-            engine: Engine::new(),
+            engine: Engine::default(),
 
             src: RefCell::new(Module {
                 src_files: vec![],
                 items: vec![],
             }),
         }
+    }
+
+    pub fn with_opt_level(mut self, opt_level: OptLevel) -> Self {
+        self.set_opt_level(opt_level);
+        self
+    }
+
+    pub fn set_opt_level(&mut self, opt_level: OptLevel) {
+        self.engine.set_opt_level(opt_level);
     }
 
     pub fn add(&self, base_name: &str, ptr: fn(i32)) {

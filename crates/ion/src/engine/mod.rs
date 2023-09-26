@@ -1,11 +1,15 @@
 use std::{cell::RefCell, collections::HashMap, mem};
 
 use arcstr::{ArcStr, Substr};
-use once_cell::unsync::Lazy;
+use inkwell::values::BasicValueEnum;
+use once_cell::unsync::{Lazy, OnceCell};
 
-use crate::syntax::{
-    ArgList, Assign, AssignOp, BinOp, Block, Expr, FnCall, FnCallExt, FnDef, FnProto, Item, Let,
-    Module, Param, ParamList, Return, Stmt, Type, Value,
+use crate::{
+    syntax::{
+        ArgList, Assign, AssignOp, BinOp, Block, CtrlIf, Expr, FnCall, FnCallExt, FnDef, FnProto,
+        Item, Let, Module, Param, ParamList, Return, Stmt, Type, Value,
+    },
+    OptLevel,
 };
 
 use llvm::BasicValue;
@@ -33,50 +37,82 @@ pub mod llvm {
 
 //
 
+impl OptLevel {
+    const fn llvm_opt_level(self) -> llvm::OptimizationLevel {
+        match self {
+            OptLevel::High => llvm::OptimizationLevel::Aggressive,
+            OptLevel::Medium => llvm::OptimizationLevel::Default,
+            OptLevel::Low => llvm::OptimizationLevel::Less,
+            OptLevel::None => llvm::OptimizationLevel::None,
+        }
+    }
+}
+
 pub struct Engine {
     module: llvm::Module<'static>,
-    builder: llvm::Builder<'static>,
 
+    opt_level: OptLevel,
+    mpm: llvm::PassManager<llvm::Module<'static>>,
     fpm: llvm::PassManager<llvm::FunctionValue<'static>>,
-
-    ee: llvm::ExecutionEngine<'static>,
+    ee: OnceCell<llvm::ExecutionEngine<'static>>,
 
     fns: RefCell<HashMap<Substr, llvm::FunctionValue<'static>>>,
 }
 
 impl Engine {
-    pub fn new() -> Self {
+    pub fn new(opt_level: OptLevel) -> Self {
         let ctx = get_ctx();
         let module = ctx.create_module("<src>");
-        let builder = ctx.create_builder();
 
-        let fpmb = llvm::PassManagerBuilder::create();
-        fpmb.set_optimization_level(llvm::OptimizationLevel::Aggressive);
-        fpmb.set_inliner_with_threshold(1024);
-
-        // let lpm = llvm::PassManager::create(&());
-        // let mpm = llvm::PassManager::create(&());
-        let fpm = llvm::PassManager::create(&module);
-
-        // fpmb.populate_lto_pass_manager(&lpm, true, true);
-        // fpmb.populate_module_pass_manager(&mpm);
-        fpmb.populate_function_pass_manager(&fpm);
-        fpm.initialize();
-
-        let ee = module
-            .create_jit_execution_engine(llvm::OptimizationLevel::Aggressive)
-            .unwrap();
+        let (mpm, fpm) = Self::gen_pm(&module, opt_level);
+        let ee = OnceCell::new();
 
         Self {
             module,
-            builder,
 
+            opt_level,
+            mpm,
             fpm,
-
             ee,
 
             fns: RefCell::new(HashMap::new()),
         }
+    }
+
+    pub fn set_opt_level(&mut self, opt_level: OptLevel) {
+        self.opt_level = opt_level;
+        (self.mpm, self.fpm) = Self::gen_pm(&self.module, opt_level);
+    }
+
+    fn gen_pm(
+        module: &llvm::Module<'static>,
+        opt_level: OptLevel,
+    ) -> (
+        llvm::PassManager<llvm::Module<'static>>,
+        llvm::PassManager<llvm::FunctionValue<'static>>,
+    ) {
+        let fpmb = llvm::PassManagerBuilder::create();
+        fpmb.set_optimization_level(opt_level.llvm_opt_level());
+        fpmb.set_inliner_with_threshold(1024);
+
+        // let lpm = llvm::PassManager::create(&());
+        let mpm = llvm::PassManager::create(&());
+        let fpm = llvm::PassManager::create(module);
+
+        // fpmb.populate_lto_pass_manager(&lpm, true, true);
+        fpmb.populate_module_pass_manager(&mpm);
+        fpmb.populate_function_pass_manager(&fpm);
+        fpm.initialize();
+
+        (mpm, fpm)
+    }
+
+    fn ee(&self) -> &llvm::ExecutionEngine<'static> {
+        self.ee.get_or_init(|| {
+            self.module
+                .create_jit_execution_engine(self.opt_level.llvm_opt_level())
+                .unwrap()
+        })
     }
 
     pub fn dump_ir(&self) -> String {
@@ -109,8 +145,14 @@ impl Engine {
     pub fn run(&self, f: &str) {
         // TODO: validate
 
+        let fns = self.fns.borrow();
+        let func = fns.get(f).expect("unknown function");
+
+        self.mpm.run_on(&self.module);
+        self.fpm.run_on(func);
+
         let start = unsafe {
-            self.ee
+            self.ee()
                 .get_function::<unsafe extern "C" fn() -> ()>(f)
                 .unwrap()
         };
@@ -136,18 +178,12 @@ impl Engine {
         let fnproto = &fndef.proto;
         let proto = self.load_fndecl(fnproto);
 
-        let entry = self
-            .module
-            .get_context()
-            .append_basic_block(proto, "fn-entry");
-        self.builder.position_at_end(entry);
-
-        let mut scope = Scope::new(entry);
+        let mut scope = Scope::new(proto);
 
         for (arg, param) in proto.get_param_iter().zip(fnproto.params.0.iter()) {
             let ty = arg.get_type();
             let ptr = self.entry_var_alloca(&param.id, ty, &scope);
-            self.builder.build_store(ptr, arg);
+            scope.builder.build_store(ptr, arg);
 
             scope.set(param.id.clone(), (ty, ptr));
         }
@@ -218,7 +254,7 @@ impl Engine {
             Stmt::Return(ret) => self.load_return(ret, scope),
             Stmt::Let(r#let) => self.load_let(r#let, scope),
             Stmt::Assign(assign) => self.load_assign(assign, scope),
-            Stmt::CtrlIf(ctrlif) => todo!(),
+            Stmt::CtrlIf(ctrlif) => self.load_ctrlif(ctrlif, scope),
             Stmt::Expr(expr) => _ = self.load_expr(expr, scope),
             /* Stmt::FnCall(fncall) => _ = self.load_fncall(fncall, scope),
             Stmt::FnCallExt(fncallext) => _ = self.load_fncallext(fncallext, scope), */
@@ -229,7 +265,7 @@ impl Engine {
         let val = ret.0.as_ref().map(|expr| self.load_expr(expr, scope));
         let val = val.as_ref().map(|val| val as _);
 
-        self.builder.build_return(val);
+        scope.builder.build_return(val);
     }
 
     pub fn load_let(&self, r#let: &Let, scope: &mut Scope) {
@@ -237,7 +273,7 @@ impl Engine {
 
         let ty = val.get_type();
         let ptr = self.entry_var_alloca(&r#let.id, ty, scope);
-        self.builder.build_store(ptr, val);
+        scope.builder.build_store(ptr, val);
 
         scope.set(r#let.id.clone(), (ty, ptr));
     }
@@ -259,11 +295,37 @@ impl Engine {
                 AssignOp::Div => BinOp::Div,
             };
 
-            let target = self.builder.build_load(ty, ptr, "tmp-assign-load");
-            self.load_binexpr(target, val, op)
+            let target = scope.builder.build_load(ty, ptr, "tmp-assign-load");
+            self.load_binexpr(target, val, op, scope)
         };
 
-        self.builder.build_store(ptr, val);
+        scope.builder.build_store(ptr, val);
+    }
+
+    pub fn load_ctrlif(&self, ctrlif: &CtrlIf, scope: &mut Scope) {
+        let condition = self.load_expr(&ctrlif.condition, scope);
+
+        let BasicValueEnum::IntValue(condition) = condition else {
+            panic!("invalid if condition");
+        };
+
+        let if_true = get_ctx().append_basic_block(scope.proto, "if-true");
+        // let if_false = get_ctx().append_basic_block(scope.proto, "if-false");
+        let if_continue = get_ctx().append_basic_block(scope.proto, "if-continue");
+
+        // scope.builder.build_float_compare(op, lhs, rhs, name);
+
+        scope
+            .builder
+            .build_conditional_branch(condition, if_true, if_continue /* if_false */);
+
+        // if_true block
+        scope.builder.position_at_end(if_true);
+        self.load_block(&ctrlif.block, scope);
+        scope.builder.build_unconditional_branch(if_continue);
+
+        // if_continue block
+        scope.builder.position_at_end(if_continue);
     }
 
     pub fn load_fncall(&self, fncall: &FnCall, scope: &mut Scope) -> llvm::BasicValueEnum<'static> {
@@ -276,7 +338,7 @@ impl Engine {
             .map(|expr| self.load_expr(expr, scope).into())
             .collect();
 
-        let call = self.builder.build_call(func, &args, "fncall-jit");
+        let call = scope.builder.build_call(func, &args, "fncall-jit");
 
         Self::process_call_value(call)
     }
@@ -300,14 +362,14 @@ impl Engine {
             .map(|expr| self.load_expr(expr, scope).into())
             .collect();
 
-        let int_ty = get_ctx().ptr_sized_int_type(self.ee.get_target_data(), None);
-        let func = self.builder.build_int_to_ptr(
+        let int_ty = get_ctx().ptr_sized_int_type(self.ee().get_target_data(), None);
+        let func = scope.builder.build_int_to_ptr(
             int_ty.const_int(fncallext.addr as _, false),
             int_ty.ptr_type(llvm::AddressSpace::default()),
             "tmp-int-to-ptr",
         );
 
-        let call = self
+        let call = scope
             .builder
             .build_indirect_call(ty, func, &args, "fncall-ext");
 
@@ -320,7 +382,7 @@ impl Engine {
                 let lhs = self.load_expr(&sides.0, scope);
                 let rhs = self.load_expr(&sides.1, scope);
 
-                self.load_binexpr(lhs, rhs, *op)
+                self.load_binexpr(lhs, rhs, *op, scope)
             }
             Expr::Value(value) => self.load_value(value),
             Expr::Variable(variable) => self.load_variable(variable, scope),
@@ -334,13 +396,14 @@ impl Engine {
         lhs: llvm::BasicValueEnum<'static>,
         rhs: llvm::BasicValueEnum<'static>,
         op: BinOp,
+        scope: &Scope,
     ) -> llvm::BasicValueEnum<'static> {
         match (lhs, rhs, op) {
             (
                 llvm::BasicValueEnum::IntValue(lhs),
                 llvm::BasicValueEnum::IntValue(rhs),
                 BinOp::Add,
-            ) => self
+            ) => scope
                 .builder
                 .build_int_add(lhs, rhs, "int-add")
                 .as_basic_value_enum(),
@@ -349,7 +412,7 @@ impl Engine {
                 llvm::BasicValueEnum::IntValue(lhs),
                 llvm::BasicValueEnum::IntValue(rhs),
                 BinOp::Sub,
-            ) => self
+            ) => scope
                 .builder
                 .build_int_sub(lhs, rhs, "int-sub")
                 .as_basic_value_enum(),
@@ -358,7 +421,7 @@ impl Engine {
                 llvm::BasicValueEnum::IntValue(lhs),
                 llvm::BasicValueEnum::IntValue(rhs),
                 BinOp::Mul,
-            ) => self
+            ) => scope
                 .builder
                 .build_int_mul(lhs, rhs, "int-mul")
                 .as_basic_value_enum(),
@@ -367,7 +430,7 @@ impl Engine {
                 llvm::BasicValueEnum::IntValue(lhs),
                 llvm::BasicValueEnum::IntValue(rhs),
                 BinOp::Div,
-            ) => self
+            ) => scope
                 .builder
                 .build_int_signed_div(lhs, rhs, "int-div")
                 .as_basic_value_enum(),
@@ -395,7 +458,7 @@ impl Engine {
 
     pub fn load_variable(&self, variable: &str, scope: &Scope) -> llvm::BasicValueEnum<'static> {
         let (ty, ptr) = scope.get(variable);
-        self.builder.build_load(ty, ptr, "tmp-load")
+        scope.builder.build_load(ty, ptr, "tmp-load")
     }
 
     fn process_call_value(call: llvm::CallSiteValue<'static>) -> llvm::BasicValueEnum<'static> {
@@ -435,27 +498,33 @@ impl Engine {
 
 impl Default for Engine {
     fn default() -> Self {
-        Self::new()
+        Self::new(OptLevel::default())
     }
 }
 
 pub struct Scope {
+    proto: llvm::FunctionValue<'static>,
     entry_builder: llvm::Builder<'static>,
+    builder: llvm::Builder<'static>,
+
     vars: Vec<Vec<Var>>,
 }
 
 impl Scope {
-    pub fn new(entry: llvm::BasicBlock<'static>) -> Self {
-        let entry_builder = get_ctx().create_builder();
+    pub fn new(proto: llvm::FunctionValue<'static>) -> Self {
+        let entry = get_ctx().append_basic_block(proto, "fn-entry");
 
-        if let Some(first) = entry.get_first_instruction() {
-            entry_builder.position_before(&first);
-        } else {
-            entry_builder.position_at_end(entry);
-        }
+        let entry_builder = get_ctx().create_builder();
+        let builder = get_ctx().create_builder();
+
+        entry_builder.position_at_end(entry);
+        builder.position_at_end(entry);
 
         Self {
+            proto,
             entry_builder,
+            builder,
+
             vars: vec![],
         }
     }
