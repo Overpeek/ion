@@ -11,14 +11,19 @@ extern {
     enum Token {
         "fn" => Token::KeywordFn,
         "let" => Token::KeywordLet,
+        "if" => Token::KeywordIf,
         "return" => Token::KeywordReturn,
         "i32" => Token::KeywordInt,
         "f32" => Token::KeywordFloat,
+        "bool" => Token::KeywordBool,
+        "str" => Token::KeywordStr,
         "none" => Token::KeywordNone,
 
         "ident" => Token::Ident(<arcstr::Substr>),
-        "int" => Token::Int(<i64>),
-        "str" => Token::Str(<arcstr::Substr>),
+        "lit_int" => Token::Int(<i64>),
+        "lit_float" => Token::Float(<f64>),
+        "lit_bool" => Token::Bool(<bool>),
+        "lit_str" => Token::Str(<arcstr::Substr>),
 
         "(" => Token::Lparen,
         ")" => Token::Rparen,
@@ -102,8 +107,10 @@ pub Stmt: Stmt = {
     Return => Stmt::Return(<>),
     Let => Stmt::Let(<>),
     Assign => Stmt::Assign(<>),
-    FnCall => Stmt::FnCall(<>),
-    // Expr => Stmt::Expr(<>),
+    CtrlIf => Stmt::CtrlIf(<>),
+    Expr => Stmt::Expr(<>),
+
+    // FnCall => Stmt::FnCall(<>),
 };
 
 pub Return: Return = {
@@ -131,6 +138,13 @@ pub AssignOp: AssignOp = {
     "-=" => AssignOp::Sub,
     "*=" => AssignOp::Mul,
     "/=" => AssignOp::Div,
+};
+
+pub CtrlIf: CtrlIf = {
+    "if" "(" <cnd:Expr> ")" <block:Block> => CtrlIf {
+        condition: Box::new(cnd),
+        block,
+    },
 };
 
 pub Expr: Expr = {
@@ -171,7 +185,9 @@ pub Term: Expr = {
 };
 
 pub Value: Value = {
-    "int" => Value::Int(<>),
+    "lit_int" => Value::Int(<>),
+    "lit_float" => Value::Float(<>),
+    "lit_bool" => Value::Bool(<>),
 };
 
 pub FnCall: FnCall = {

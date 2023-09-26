@@ -9,6 +9,14 @@ fn lex_int(lex: &logos::Lexer<Token>) -> Option<i64> {
     lex.slice().parse().ok()
 }
 
+fn lex_float(lex: &logos::Lexer<Token>) -> Option<f64> {
+    lex.slice().parse().ok()
+}
+
+fn lex_bool(lex: &logos::Lexer<Token>) -> Option<bool> {
+    lex.slice().parse().ok()
+}
+
 fn lex_substr(lex: &logos::Lexer<Token>) -> Option<Substr> {
     let src: &ArcStr = &lex.extras;
     Some(src.substr(lex.span()))
@@ -26,10 +34,16 @@ pub enum Token {
     KeywordLet,
     #[token("return")]
     KeywordReturn,
+    #[token("if")]
+    KeywordIf,
     #[token("i32")]
     KeywordInt,
     #[token("f32")]
     KeywordFloat,
+    #[token("bool")]
+    KeywordBool,
+    #[token("str")]
+    KeywordStr,
     #[token("none")]
     KeywordNone,
 
@@ -38,6 +52,10 @@ pub enum Token {
 
     #[regex(r"\d+", lex_int)]
     Int(i64),
+    #[regex(r"(\d+\.\d*)|(\d*\.\d+)", lex_float)]
+    Float(f64),
+    #[regex(r#"(true)|(false)"#, lex_bool)]
+    Bool(bool),
     #[regex(r#""[^"]*""#, lex_substr)]
     Str(Substr),
 

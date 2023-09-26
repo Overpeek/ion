@@ -95,11 +95,11 @@ impl Engine {
                 ty: Type::None,
             },
             block: Block {
-                stmts: vec![Stmt::FnCallExt(FnCallExt {
+                stmts: vec![Stmt::Expr(Expr::FnCallExt(FnCallExt {
                     id,
                     addr: ptr as _,
                     args: ArgList(vec![Expr::Variable(arcstr::format!("1").into())]),
-                })],
+                }))],
             },
         });
 
@@ -208,6 +208,7 @@ impl Engine {
         match ty {
             Type::I32 => ctx.i32_type().fn_type(&param_types, false),
             Type::F32 => ctx.f32_type().fn_type(&param_types, false),
+            Type::Bool => ctx.bool_type().fn_type(&param_types, false),
             Type::None => ctx.void_type().fn_type(&param_types, false),
         }
     }
@@ -217,8 +218,10 @@ impl Engine {
             Stmt::Return(ret) => self.load_return(ret, scope),
             Stmt::Let(r#let) => self.load_let(r#let, scope),
             Stmt::Assign(assign) => self.load_assign(assign, scope),
-            Stmt::FnCall(fncall) => _ = self.load_fncall(fncall, scope),
-            Stmt::FnCallExt(fncallext) => _ = self.load_fncallext(fncallext, scope),
+            Stmt::CtrlIf(ctrlif) => todo!(),
+            Stmt::Expr(expr) => _ = self.load_expr(expr, scope),
+            /* Stmt::FnCall(fncall) => _ = self.load_fncall(fncall, scope),
+            Stmt::FnCallExt(fncallext) => _ = self.load_fncallext(fncallext, scope), */
         }
     }
 
@@ -414,16 +417,9 @@ impl Engine {
         scope: &Scope,
     ) -> llvm::PointerValue<'static> {
         // TODO: reuse
-        let builder = self.module.get_context().create_builder();
-
-        if let Some(first) = scope.entry.get_first_instruction() {
-            builder.position_before(&first);
-        } else {
-            builder.position_at_end(scope.entry);
-        }
-
-        println!("build alloca `{name}`");
-        builder.build_alloca(ty, /* Self::type_enum(ty) */ name)
+        scope
+            .entry_builder
+            .build_alloca(ty, /* Self::type_enum(ty) */ name)
     }
 
     fn type_enum(ty: &Type) -> llvm::BasicTypeEnum<'static> {
@@ -431,6 +427,7 @@ impl Engine {
         match ty {
             Type::I32 => ctx.i32_type().into(),
             Type::F32 => ctx.f32_type().into(),
+            Type::Bool => ctx.bool_type().into(),
             Type::None => ctx.struct_type(&[], false).into(),
         }
     }
@@ -443,14 +440,22 @@ impl Default for Engine {
 }
 
 pub struct Scope {
-    entry: llvm::BasicBlock<'static>,
+    entry_builder: llvm::Builder<'static>,
     vars: Vec<Vec<Var>>,
 }
 
 impl Scope {
     pub fn new(entry: llvm::BasicBlock<'static>) -> Self {
+        let entry_builder = get_ctx().create_builder();
+
+        if let Some(first) = entry.get_first_instruction() {
+            entry_builder.position_before(&first);
+        } else {
+            entry_builder.position_at_end(entry);
+        }
+
         Self {
-            entry,
+            entry_builder,
             vars: vec![],
         }
     }

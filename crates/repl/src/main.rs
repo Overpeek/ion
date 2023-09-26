@@ -14,6 +14,10 @@ fn main() {
         print(x);
         x *= 5;
         print(x);
+        let c = true;
+        if (c) {
+            print(42);
+        };
     "#;
 
     let state = State::new();

@@ -2,7 +2,7 @@ use std::fmt;
 
 use crate::util::{PrintSource, Source};
 
-use super::{Assign, Expr, FnCall, FnCallExt, Let};
+use super::{Assign, CtrlIf, Expr, Let};
 
 //
 
@@ -11,9 +11,8 @@ pub enum Stmt {
     Return(Return),
     Let(Let),
     Assign(Assign),
-    FnCall(FnCall),
-    FnCallExt(FnCallExt),
-    // Expr(Expr),
+    CtrlIf(CtrlIf),
+    Expr(Expr),
 }
 
 impl fmt::Display for Source<'_, Stmt> {
@@ -22,8 +21,8 @@ impl fmt::Display for Source<'_, Stmt> {
             Stmt::Return(v) => v.as_source(self.indent).fmt(f),
             Stmt::Let(v) => v.as_source(self.indent).fmt(f),
             Stmt::Assign(v) => v.as_source(self.indent).fmt(f),
-            Stmt::FnCall(v) => v.as_source(self.indent).fmt(f),
-            Stmt::FnCallExt(v) => v.as_source(self.indent).fmt(f),
+            Stmt::CtrlIf(v) => v.as_source(self.indent).fmt(f),
+            Stmt::Expr(v) => v.as_source(self.indent).fmt(f),
         }
     }
 }

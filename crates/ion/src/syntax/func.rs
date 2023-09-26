@@ -86,6 +86,7 @@ impl fmt::Display for Source<'_, Param> {
 pub enum Type {
     I32,
     F32,
+    Bool,
     None,
 }
 
@@ -94,6 +95,7 @@ impl Type {
         match self {
             Type::I32 => "i32",
             Type::F32 => "f32",
+            Type::Bool => "bool",
             Type::None => "none",
         }
     }
@@ -104,6 +106,7 @@ impl fmt::Display for Source<'_, Type> {
         match self.inner {
             Type::I32 => write!(f, "i32"),
             Type::F32 => write!(f, "f32"),
+            Type::Bool => write!(f, "bool"),
             Type::None => write!(f, "none"),
         }
     }
