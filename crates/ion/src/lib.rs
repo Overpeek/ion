@@ -113,6 +113,21 @@ impl AsIonType for f32 {
     }
 }
 
+impl AsIonType for bool {
+    const TYPE: Type = Type::Bool;
+
+    fn to_runtime(self) -> RuntimeValue {
+        RuntimeValue::Bool(self)
+    }
+
+    fn from_runtime(runtime_val: RuntimeValue) -> Option<Self> {
+        match runtime_val {
+            RuntimeValue::Bool(v) => Some(v),
+            _ => None,
+        }
+    }
+}
+
 impl AsIonType for () {
     const TYPE: Type = Type::None;
 
