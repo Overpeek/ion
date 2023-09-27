@@ -170,8 +170,7 @@ impl Engine {
     pub fn run(&self, f: &str) {
         // TODO: validate
 
-        println!("RUNNING");
-        println!("\nIR:\n{}\nEND IR", self.dump_ir());
+        tracing::debug!("running");
         let fns = self.fns.borrow();
         let func = fns.get(f).expect("unknown function");
 
