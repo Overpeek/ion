@@ -1,18 +1,15 @@
-use std::{
-    arch::x86_64::_MM_FROUND_CUR_DIRECTION, cell::RefCell, collections::HashMap, ffi::c_void, mem,
-    slice::from_raw_parts_mut,
-};
+use std::{cell::RefCell, collections::HashMap, mem};
 
-use arcstr::{ArcStr, Substr};
-use inkwell::{values::BasicValueEnum, AddressSpace};
+use arcstr::Substr;
+use inkwell::values::BasicValueEnum;
 use once_cell::unsync::{Lazy, OnceCell};
 
 use crate::{
     syntax::{
-        ArgList, Assign, AssignOp, BinOp, Block, CtrlIf, Expr, FnCall, FnCallExt, FnDef, FnProto,
-        Item, Let, Module, Param, ParamList, Return, Stmt, Type, Value,
+        Assign, AssignOp, BinOp, Block, CtrlIf, Expr, FnCall, FnCallExt, FnDef, FnProto, Item, Let,
+        Module, Param, ParamList, Return, Stmt, Type, Value,
     },
-    AsIonType, IonCallback, OptLevel, RuntimeValue,
+    IonCallback, OptLevel,
 };
 
 use llvm::BasicValue;
