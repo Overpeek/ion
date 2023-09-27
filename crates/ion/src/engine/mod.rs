@@ -1,7 +1,10 @@
-use std::{cell::RefCell, collections::HashMap, mem};
+use std::{
+    arch::x86_64::_MM_FROUND_CUR_DIRECTION, cell::RefCell, collections::HashMap, ffi::c_void, mem,
+    slice::from_raw_parts_mut,
+};
 
 use arcstr::{ArcStr, Substr};
-use inkwell::values::BasicValueEnum;
+use inkwell::{values::BasicValueEnum, AddressSpace};
 use once_cell::unsync::{Lazy, OnceCell};
 
 use crate::{
@@ -9,10 +12,14 @@ use crate::{
         ArgList, Assign, AssignOp, BinOp, Block, CtrlIf, Expr, FnCall, FnCallExt, FnDef, FnProto,
         Item, Let, Module, Param, ParamList, Return, Stmt, Type, Value,
     },
-    IonCallback, OptLevel,
+    AsIonType, IonCallback, OptLevel, RuntimeValue,
 };
 
 use llvm::BasicValue;
+
+//
+
+mod callback;
 
 //
 
@@ -29,7 +36,7 @@ pub mod llvm {
         },
         values::{
             BasicMetadataValueEnum, BasicValue, BasicValueEnum, CallSiteValue, FunctionValue,
-            IntValue, PointerValue,
+            IntValue, PointerValue, StructValue,
         },
         AddressSpace, IntPredicate, OptimizationLevel,
     };
@@ -57,6 +64,7 @@ pub struct Engine {
     ee: OnceCell<llvm::ExecutionEngine<'static>>,
 
     fns: RefCell<HashMap<Substr, llvm::FunctionValue<'static>>>,
+    // user_fns: Vec<*mut c_void>,
 }
 
 impl Engine {
@@ -76,6 +84,7 @@ impl Engine {
             ee,
 
             fns: RefCell::new(HashMap::new()),
+            // user_fns: vec![],
         }
     }
 
@@ -119,7 +128,18 @@ impl Engine {
         self.module.print_to_string().to_string()
     }
 
-    pub fn add(&self, base_name: &str, func: impl IonCallback) {
+    pub fn add<C, F>(&self, base_name: &str, func: C)
+    where
+        C: IonCallback<F> + 'static,
+    {
+        tracing::debug!(
+            "adding closure (`{base_name}`{:?}->{:?}) to runtime",
+            func.args(),
+            func.ty()
+        );
+
+        // TODO: re-add the old 'extern "C" fn callbacks'
+        // as optional, faster, lower overhead callbacks
         let params: Vec<Param> = func
             .args()
             .iter()
@@ -130,44 +150,28 @@ impl Engine {
             })
             .collect();
 
-        let args = params
-            .iter()
-            .map(|p| Expr::Variable(p.id.clone()))
-            .collect();
-
-        let id = ArcStr::from(base_name).substr(..);
-        let ty = func.ty();
-        let is_none = ty == Type::None;
-
-        let proto = FnProto {
-            id: id.clone(),
-            params: ParamList(params),
-            ty,
-        };
-
-        let call = Expr::FnCallExt(FnCallExt {
+        let fnproto = FnProto {
             id: base_name.into(),
-            addr: func.addr(),
-            args: ArgList(args),
-        });
-
-        let stmt = if is_none {
-            Stmt::Expr(call)
-        } else {
-            Stmt::Return(Return(Some(call)))
+            params: ParamList(params),
+            ty: func.ty(),
         };
+        let wrapper = self.load_fnproto(&fnproto);
 
-        self.load_fndef(&FnDef {
-            proto,
-            block: Block { stmts: vec![stmt] },
-        });
+        let mut scope = Scope::new(wrapper);
+        scope.init_fn_args(self, &fnproto);
 
-        /* self.load_fnproto(); */
+        let result = callback::call_closure(self, &scope, func);
+        let result = result.as_ref().map(|r| r as _);
+        scope.builder.build_return(result);
+
+        self.fns.borrow_mut().insert(fnproto.id.clone(), wrapper);
     }
 
     pub fn run(&self, f: &str) {
         // TODO: validate
 
+        println!("RUNNING");
+        println!("\nIR:\n{}\nEND IR", self.dump_ir());
         let fns = self.fns.borrow();
         let func = fns.get(f).expect("unknown function");
 
@@ -202,14 +206,7 @@ impl Engine {
         let proto = self.load_fndecl(fnproto);
 
         let mut scope = Scope::new(proto);
-
-        for (arg, param) in proto.get_param_iter().zip(fnproto.params.0.iter()) {
-            let ty = arg.get_type();
-            let ptr = self.entry_var_alloca(&param.id, ty, &scope);
-            scope.builder.build_store(ptr, arg);
-
-            scope.set(param.id.clone(), (ty, ptr));
-        }
+        scope.init_fn_args(self, fnproto);
 
         self.load_block(&fndef.block, &mut scope);
 
@@ -269,6 +266,7 @@ impl Engine {
 
         let ctx = get_ctx();
         match ty {
+            Type::U64 => ctx.i64_type().fn_type(&param_types, false),
             Type::I32 => ctx.i32_type().fn_type(&param_types, false),
             Type::F32 => ctx.f32_type().fn_type(&param_types, false),
             Type::Bool => ctx.bool_type().fn_type(&param_types, false),
@@ -506,6 +504,7 @@ impl Engine {
     fn type_enum(ty: &Type) -> llvm::BasicTypeEnum<'static> {
         let ctx = get_ctx();
         match ty {
+            Type::U64 => ctx.i64_type().into(),
             Type::I32 => ctx.i32_type().into(),
             Type::F32 => ctx.f32_type().into(),
             Type::Bool => ctx.bool_type().into(),
@@ -544,6 +543,16 @@ impl Scope {
             builder,
 
             vars: vec![],
+        }
+    }
+
+    pub fn init_fn_args(&mut self, engine: &Engine, fnproto: &FnProto) {
+        for (arg, param) in self.proto.get_param_iter().zip(fnproto.params.0.iter()) {
+            let ty = arg.get_type();
+            let ptr = engine.entry_var_alloca(&param.id, ty, self);
+            self.builder.build_store(ptr, arg);
+
+            self.set(param.id.clone(), (ty, ptr));
         }
     }
 

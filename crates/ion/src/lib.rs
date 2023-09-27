@@ -50,59 +50,148 @@ pub enum OptLevel {
     None,
 }
 
-pub trait AsIonType {
+#[derive(Debug, Clone, Copy)]
+#[repr(C, u8)]
+pub enum RuntimeValue {
+    U64(u64) = 4,
+    I32(i32) = 3,
+    F32(f32) = 2,
+    Bool(bool) = 1,
+    None = 0,
+}
+
+pub trait AsIonType: Sized {
     const TYPE: Type;
+
+    fn to_runtime(self) -> RuntimeValue;
+
+    fn from_runtime(runtime_val: RuntimeValue) -> Option<Self>;
+}
+
+impl AsIonType for u64 {
+    const TYPE: Type = Type::U64;
+
+    fn to_runtime(self) -> RuntimeValue {
+        RuntimeValue::U64(self)
+    }
+
+    fn from_runtime(runtime_val: RuntimeValue) -> Option<Self> {
+        match runtime_val {
+            RuntimeValue::U64(v) => Some(v),
+            _ => None,
+        }
+    }
 }
 
 impl AsIonType for i32 {
     const TYPE: Type = Type::I32;
+
+    fn to_runtime(self) -> RuntimeValue {
+        RuntimeValue::I32(self)
+    }
+
+    fn from_runtime(runtime_val: RuntimeValue) -> Option<Self> {
+        match runtime_val {
+            RuntimeValue::I32(v) => Some(v),
+            _ => None,
+        }
+    }
 }
 
 impl AsIonType for f32 {
     const TYPE: Type = Type::F32;
+
+    fn to_runtime(self) -> RuntimeValue {
+        RuntimeValue::F32(self)
+    }
+
+    fn from_runtime(runtime_val: RuntimeValue) -> Option<Self> {
+        match runtime_val {
+            RuntimeValue::F32(v) => Some(v),
+            _ => None,
+        }
+    }
 }
 
 impl AsIonType for () {
     const TYPE: Type = Type::None;
+
+    fn to_runtime(self) -> RuntimeValue {
+        RuntimeValue::None
+    }
+
+    fn from_runtime(runtime_val: RuntimeValue) -> Option<Self> {
+        match runtime_val {
+            RuntimeValue::None => Some(()),
+            _ => None,
+        }
+    }
 }
 
-pub trait IonCallback {
+pub trait IonCallback<F> {
     const ARGS: &'static [Type];
     const TYPE: Type;
-
-    fn addr(self) -> usize;
 
     fn args(&self) -> &'static [Type] {
         Self::ARGS
     }
 
     fn ty(&self) -> Type {
-        Self::TYPE
+        Self::TYPE.clone()
     }
+
+    fn call(&mut self, args: &[RuntimeValue]) -> RuntimeValue;
 }
 
-impl<R> IonCallback for fn() -> R
+impl<F, R> IonCallback<(R,)> for F
 where
+    F: FnMut() -> R,
     R: AsIonType,
 {
     const ARGS: &'static [Type] = &[];
     const TYPE: Type = R::TYPE;
 
-    fn addr(self) -> usize {
-        self as _
+    fn call(&mut self, args: &[RuntimeValue]) -> RuntimeValue {
+        assert_eq!(args.len(), 0);
+        AsIonType::to_runtime((self)())
     }
 }
 
-impl<A1, R> IonCallback for fn(A1) -> R
+impl<F, A1, R> IonCallback<(A1, R)> for F
 where
+    F: FnMut(A1) -> R,
     A1: AsIonType,
     R: AsIonType,
 {
     const ARGS: &'static [Type] = &[A1::TYPE];
     const TYPE: Type = R::TYPE;
 
-    fn addr(self) -> usize {
-        self as _
+    fn call(&mut self, args: &[RuntimeValue]) -> RuntimeValue {
+        assert_eq!(args.len(), 1);
+
+        let a1 = A1::from_runtime(args[0]).expect("runtime type error");
+
+        AsIonType::to_runtime((self)(a1))
+    }
+}
+
+impl<F, A1, A2, R> IonCallback<(A1, A2, R)> for F
+where
+    F: FnMut(A1, A2) -> R,
+    A1: AsIonType,
+    A2: AsIonType,
+    R: AsIonType,
+{
+    const ARGS: &'static [Type] = &[A1::TYPE, A2::TYPE];
+    const TYPE: Type = R::TYPE;
+
+    fn call(&mut self, args: &[RuntimeValue]) -> RuntimeValue {
+        assert_eq!(args.len(), 2);
+
+        let a1 = A1::from_runtime(args[0]).expect("runtime type error");
+        let a2 = A2::from_runtime(args[1]).expect("runtime type error");
+
+        AsIonType::to_runtime((self)(a1, a2))
     }
 }
 
@@ -131,9 +220,14 @@ impl State {
         self.engine.set_opt_level(opt_level);
     }
 
-    pub fn add(&self, base_name: &str, func: impl IonCallback) {
+    pub fn add<C, F>(&self, base_name: &str, func: C)
+    where
+        C: IonCallback<F> + 'static,
+    {
         self.engine.add(base_name, func);
     }
+
+    // pub unsafe fn add_ext(&self, name: &str) {}
 
     pub fn include_module(&self, input: &str) -> IonResult<()> {
         let mut errors = vec![];

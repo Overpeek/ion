@@ -85,6 +85,7 @@ impl fmt::Display for Source<'_, Param> {
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 #[repr(C)]
 pub enum Type {
+    U64,
     I32,
     F32,
     Bool,
@@ -94,6 +95,7 @@ pub enum Type {
 impl Type {
     pub const fn as_str(&self) -> &'static str {
         match self {
+            Type::U64 => "u64",
             Type::I32 => "i32",
             Type::F32 => "f32",
             Type::Bool => "bool",
@@ -105,6 +107,7 @@ impl Type {
 impl fmt::Display for Source<'_, Type> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self.inner {
+            Type::U64 => write!(f, "u64"),
             Type::I32 => write!(f, "i32"),
             Type::F32 => write!(f, "f32"),
             Type::Bool => write!(f, "bool"),
