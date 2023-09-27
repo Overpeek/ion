@@ -15,6 +15,7 @@ fn main() {
         print(add(inc(), inc())); // 17
         print(add(inc(), inc())); // 21
         print(sqr(12));           // 144
+        print_b(false);           // false
     "#;
 
     let lvl = OptLevel::High;
@@ -30,10 +31,9 @@ fn main() {
         n
     });
     state.add("sqr", move |v: i32| v * v);
-    state.add("print", move |v: i32| {
-        println!("{v}");
-    });
-    state.add("add", move |l: i32, r: i32| l + r);
+    state.add("add", |l: i32, r: i32| l + r);
+    state.add("print", |v: i32| println!("{v}"));
+    state.add("print_b", |v: bool| println!("{v}"));
 
     state.run(src).unwrap_or_else(|err| {
         eprintln!("{}", err.pretty_print(true, src, "<src>"));
