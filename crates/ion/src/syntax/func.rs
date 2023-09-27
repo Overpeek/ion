@@ -83,6 +83,7 @@ impl fmt::Display for Source<'_, Param> {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[repr(C)]
 pub enum Type {
     I32,
     F32,

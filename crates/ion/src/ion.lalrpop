@@ -39,6 +39,11 @@ extern {
         "-" => Token::OpSub,
         "*" => Token::OpMul,
         "/" => Token::OpDiv,
+        "<" => Token::OpLt,
+        "<=" => Token::OpLe,
+        "==" => Token::OpEq,
+        ">=" => Token::OpGe,
+        ">" => Token::OpGt,
 
         "=" => Token::Assign,
         "+=" => Token::AddAssign,
@@ -153,29 +158,46 @@ pub Expr: Expr = {
 
     #[precedence(level = "2")]
     #[assoc(side = "left")]
-    <lhs:Expr> "/" <rhs:Expr> => Expr::BinExpr {
+    <lhs:Expr> <op:ProdOp> <rhs:Expr> => Expr::BinExpr {
         sides: Box::new((lhs, rhs)),
-        op: BinOp::Div,
-    },
-    <lhs:Expr> "*" <rhs:Expr> => Expr::BinExpr {
-        sides: Box::new((lhs, rhs)),
-        op: BinOp::Mul,
+        op,
     },
 
     #[precedence(level = "3")]
     #[assoc(side = "left")]
-    <lhs:Expr> "-" <rhs:Expr> => Expr::BinExpr {
+    <lhs:Expr> <op:TermOp> <rhs:Expr> => Expr::BinExpr {
         sides: Box::new((lhs, rhs)),
-        op: BinOp::Sub,
-    },
-    <lhs:Expr> "+" <rhs:Expr> => Expr::BinExpr {
-        sides: Box::new((lhs, rhs)),
-        op: BinOp::Add,
+        op,
     },
 
     #[precedence(level = "4")]
     #[assoc(side = "left")]
     FnCall => Expr::FnCall(<>),
+
+    #[precedence(level = "5")]
+    #[assoc(side = "left")]
+    <lhs:Expr> <op:CmpOp> <rhs:Expr> => Expr::BinExpr {
+        sides: Box::new((lhs, rhs)),
+        op,
+    },
+};
+
+ProdOp: BinOp = {
+    "*" => BinOp::Mul,
+    "/" => BinOp::Div,
+};
+
+TermOp: BinOp = {
+    "+" => BinOp::Add,
+    "-" => BinOp::Sub,
+};
+
+CmpOp: BinOp = {
+    "<" => BinOp::Lt,
+    "<=" => BinOp::Le,
+    "==" => BinOp::Eq,
+    ">=" => BinOp::Ge,
+    ">" => BinOp::Gt,
 };
 
 pub Term: Expr = {

@@ -43,16 +43,39 @@ pub enum BinOp {
     Sub,
     Mul,
     Div,
+
+    Lt,
+    Le,
+    Eq,
+    Ge,
+    Gt,
+}
+
+impl BinOp {
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            BinOp::Add => "+",
+            BinOp::Sub => "-",
+            BinOp::Mul => "*",
+            BinOp::Div => "/",
+            BinOp::Lt => "<",
+            BinOp::Le => "<=",
+            BinOp::Eq => "==",
+            BinOp::Ge => ">=",
+            BinOp::Gt => ">",
+        }
+    }
 }
 
 impl fmt::Display for Source<'_, BinOp> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self.inner {
-            BinOp::Add => write!(f, "+"),
-            BinOp::Sub => write!(f, "-"),
-            BinOp::Mul => write!(f, "*"),
-            BinOp::Div => write!(f, "/"),
-        }
+        write!(f, "{}", self.inner.as_str())
+    }
+}
+
+impl fmt::Display for BinOp {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", self.as_str())
     }
 }
 

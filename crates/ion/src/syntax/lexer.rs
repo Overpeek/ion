@@ -86,6 +86,16 @@ pub enum Token {
     OpMul,
     #[token("/")]
     OpDiv,
+    #[token("<")]
+    OpLt,
+    #[token("<=")]
+    OpLe,
+    #[token("==")]
+    OpEq,
+    #[token(">=")]
+    OpGe,
+    #[token(">")]
+    OpGt,
 
     #[token("=")]
     Assign,

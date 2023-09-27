@@ -9,7 +9,7 @@ use crate::{
         ArgList, Assign, AssignOp, BinOp, Block, CtrlIf, Expr, FnCall, FnCallExt, FnDef, FnProto,
         Item, Let, Module, Param, ParamList, Return, Stmt, Type, Value,
     },
-    OptLevel,
+    IonCallback, OptLevel,
 };
 
 use llvm::BasicValue;
@@ -29,9 +29,9 @@ pub mod llvm {
         },
         values::{
             BasicMetadataValueEnum, BasicValue, BasicValueEnum, CallSiteValue, FunctionValue,
-            PointerValue,
+            IntValue, PointerValue,
         },
-        AddressSpace, OptimizationLevel,
+        AddressSpace, IntPredicate, OptimizationLevel,
     };
 }
 
@@ -119,24 +119,47 @@ impl Engine {
         self.module.print_to_string().to_string()
     }
 
-    pub fn add(&self, base_name: &str, ptr: fn(i32)) {
+    pub fn add(&self, base_name: &str, func: impl IonCallback) {
+        let params: Vec<Param> = func
+            .args()
+            .iter()
+            .enumerate()
+            .map(|(i, ty)| Param {
+                id: arcstr::format!("{i}").into(),
+                ty: ty.clone(),
+            })
+            .collect();
+
+        let args = params
+            .iter()
+            .map(|p| Expr::Variable(p.id.clone()))
+            .collect();
+
         let id = ArcStr::from(base_name).substr(..);
+        let ty = func.ty();
+        let is_none = ty == Type::None;
+
+        let proto = FnProto {
+            id: id.clone(),
+            params: ParamList(params),
+            ty,
+        };
+
+        let call = Expr::FnCallExt(FnCallExt {
+            id: base_name.into(),
+            addr: func.addr(),
+            args: ArgList(args),
+        });
+
+        let stmt = if is_none {
+            Stmt::Expr(call)
+        } else {
+            Stmt::Return(Return(Some(call)))
+        };
+
         self.load_fndef(&FnDef {
-            proto: FnProto {
-                id: id.clone(),
-                params: ParamList(vec![Param {
-                    id: arcstr::format!("1").into(),
-                    ty: Type::I32,
-                }]),
-                ty: Type::None,
-            },
-            block: Block {
-                stmts: vec![Stmt::Expr(Expr::FnCallExt(FnCallExt {
-                    id,
-                    addr: ptr as _,
-                    args: ArgList(vec![Expr::Variable(arcstr::format!("1").into())]),
-                }))],
-            },
+            proto,
+            block: Block { stmts: vec![stmt] },
         });
 
         /* self.load_fnproto(); */
@@ -189,9 +212,13 @@ impl Engine {
         }
 
         self.load_block(&fndef.block, &mut scope);
-        self.load_return(&Return(None), &mut scope);
+
+        if fndef.proto.ty == Type::None {
+            self.load_return(&Return(None), &mut scope);
+        }
 
         if !proto.verify(true) {
+            println!("\nIR:\n{}\nEND IR", self.dump_ir());
             panic!("invalid function");
         }
 
@@ -398,44 +425,35 @@ impl Engine {
         op: BinOp,
         scope: &Scope,
     ) -> llvm::BasicValueEnum<'static> {
-        match (lhs, rhs, op) {
-            (
-                llvm::BasicValueEnum::IntValue(lhs),
-                llvm::BasicValueEnum::IntValue(rhs),
-                BinOp::Add,
-            ) => scope
-                .builder
-                .build_int_add(lhs, rhs, "int-add")
-                .as_basic_value_enum(),
+        use llvm::{BasicValueEnum::IntValue as I, IntPredicate as Ip};
 
-            (
-                llvm::BasicValueEnum::IntValue(lhs),
-                llvm::BasicValueEnum::IntValue(rhs),
-                BinOp::Sub,
-            ) => scope
-                .builder
-                .build_int_sub(lhs, rhs, "int-sub")
-                .as_basic_value_enum(),
+        let b = &scope.builder;
 
-            (
-                llvm::BasicValueEnum::IntValue(lhs),
-                llvm::BasicValueEnum::IntValue(rhs),
-                BinOp::Mul,
-            ) => scope
-                .builder
-                .build_int_mul(lhs, rhs, "int-mul")
-                .as_basic_value_enum(),
+        fn conv<V: llvm::BasicValue<'static>>(v: V) -> llvm::BasicValueEnum<'static> {
+            v.as_basic_value_enum()
+        }
 
-            (
-                llvm::BasicValueEnum::IntValue(lhs),
-                llvm::BasicValueEnum::IntValue(rhs),
-                BinOp::Div,
-            ) => scope
-                .builder
-                .build_int_signed_div(lhs, rhs, "int-div")
-                .as_basic_value_enum(),
+        fn bin_op_as_int_predicate(op: BinOp) -> Option<Ip> {
+            match op {
+                BinOp::Lt => Some(Ip::SLT),
+                BinOp::Le => Some(Ip::SLE),
+                BinOp::Eq => Some(Ip::EQ),
+                BinOp::Ge => Some(Ip::SGE),
+                BinOp::Gt => Some(Ip::SGT),
+                _ => None,
+            }
+        }
 
-            (lhs, rhs, op) => {
+        match (lhs, rhs, op, bin_op_as_int_predicate(op)) {
+            (I(l), I(r), BinOp::Add, _) => conv(b.build_int_add(l, r, "int-add")),
+            (I(l), I(r), BinOp::Sub, _) => conv(b.build_int_sub(l, r, "int-sub")),
+            (I(l), I(r), BinOp::Mul, _) => conv(b.build_int_mul(l, r, "int-mul")),
+            (I(l), I(r), BinOp::Div, _) => conv(b.build_int_signed_div(l, r, "int-div")),
+
+            (I(l), I(r), _, Some(cmp)) => conv(b.build_int_compare(cmp, l, r, "int-cmp")),
+
+            (lhs, rhs, op, _) => {
+                let (lhs, rhs) = (lhs.get_type(), rhs.get_type());
                 panic!("cannot eval `{op:?}` with `{lhs}` and `{rhs}`");
             }
         }

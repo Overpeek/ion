@@ -50,6 +50,62 @@ pub enum OptLevel {
     None,
 }
 
+pub trait AsIonType {
+    const TYPE: Type;
+}
+
+impl AsIonType for i32 {
+    const TYPE: Type = Type::I32;
+}
+
+impl AsIonType for f32 {
+    const TYPE: Type = Type::F32;
+}
+
+impl AsIonType for () {
+    const TYPE: Type = Type::None;
+}
+
+pub trait IonCallback {
+    const ARGS: &'static [Type];
+    const TYPE: Type;
+
+    fn addr(self) -> usize;
+
+    fn args(&self) -> &'static [Type] {
+        Self::ARGS
+    }
+
+    fn ty(&self) -> Type {
+        Self::TYPE
+    }
+}
+
+impl<R> IonCallback for fn() -> R
+where
+    R: AsIonType,
+{
+    const ARGS: &'static [Type] = &[];
+    const TYPE: Type = R::TYPE;
+
+    fn addr(self) -> usize {
+        self as _
+    }
+}
+
+impl<A1, R> IonCallback for fn(A1) -> R
+where
+    A1: AsIonType,
+    R: AsIonType,
+{
+    const ARGS: &'static [Type] = &[A1::TYPE];
+    const TYPE: Type = R::TYPE;
+
+    fn addr(self) -> usize {
+        self as _
+    }
+}
+
 //
 
 impl State {
@@ -75,8 +131,8 @@ impl State {
         self.engine.set_opt_level(opt_level);
     }
 
-    pub fn add(&self, base_name: &str, ptr: fn(i32)) {
-        self.engine.add(base_name, ptr);
+    pub fn add(&self, base_name: &str, func: impl IonCallback) {
+        self.engine.add(base_name, func);
     }
 
     pub fn include_module(&self, input: &str) -> IonResult<()> {
