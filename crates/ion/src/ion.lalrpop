@@ -103,19 +103,27 @@ pub Block: Block = {
 };
 
 pub Chunk: Block = {
-    ";"* <stmts: (<Stmt> ";"+)*> => Block {
+    <stmts: (<Stmt>)*> => Block {
         stmts
     }
 };
 
 pub Stmt: Stmt = {
+    <SemiStmt> ";" => <>,
+    <NoSemiStmt> => <>,
+
+    ";" => Stmt::Semi,
+};
+
+SemiStmt: Stmt = {
     Return => Stmt::Return(<>),
     Let => Stmt::Let(<>),
     Assign => Stmt::Assign(<>),
-    CtrlIf => Stmt::CtrlIf(<>),
     Expr => Stmt::Expr(<>),
+};
 
-    // FnCall => Stmt::FnCall(<>),
+NoSemiStmt: Stmt = {
+    CtrlIf => Stmt::CtrlIf(<>),
 };
 
 pub Return: Return = {
@@ -146,11 +154,20 @@ pub AssignOp: AssignOp = {
 };
 
 pub CtrlIf: CtrlIf = {
-    "if" "(" <cnd:Expr> ")" <block:Block> => CtrlIf {
+    "if" <cnd:Expr> <block:Block> => CtrlIf {
         condition: Box::new(cnd),
         block,
     },
 };
+
+// pub Expr: Expr = {
+//    #[precedence(level = "1")]
+//    Exprk,
+// 
+//    #[precedence(level = "2")]
+//    #[assoc(side = "left")]
+//    FnCall => Expr::FnCall(<>),
+// };
 
 pub Expr: Expr = {
     #[precedence(level = "1")]
@@ -170,16 +187,17 @@ pub Expr: Expr = {
         op,
     },
 
-    #[precedence(level = "4")]
-    #[assoc(side = "left")]
-    FnCall => Expr::FnCall(<>),
+    // #[precedence(level = "4")]
+    // #[assoc(side = "left")]
+    // <lhs:Expr> <op:CmpOp> <rhs:Expr> => Expr::BinExpr {
+    //     sides: Box::new((lhs, rhs)),
+    //     op,
+    // },
+
 
     #[precedence(level = "5")]
-    #[assoc(side = "left")]
-    <lhs:Expr> <op:CmpOp> <rhs:Expr> => Expr::BinExpr {
-        sides: Box::new((lhs, rhs)),
-        op,
-    },
+    #[assoc(side = "right")]
+    FnCall => Expr::FnCall(<>),
 };
 
 ProdOp: BinOp = {

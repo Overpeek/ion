@@ -277,6 +277,7 @@ impl Engine {
             Stmt::Assign(assign) => self.load_assign(assign, scope),
             Stmt::CtrlIf(ctrlif) => self.load_ctrlif(ctrlif, scope),
             Stmt::Expr(expr) => _ = self.load_expr(expr, scope),
+            Stmt::Semi => {}
             /* Stmt::FnCall(fncall) => _ = self.load_fncall(fncall, scope),
             Stmt::FnCallExt(fncallext) => _ = self.load_fncallext(fncallext, scope), */
         }

@@ -13,6 +13,7 @@ pub enum Stmt {
     Assign(Assign),
     CtrlIf(CtrlIf),
     Expr(Expr),
+    Semi,
 }
 
 impl fmt::Display for Source<'_, Stmt> {
@@ -23,6 +24,7 @@ impl fmt::Display for Source<'_, Stmt> {
             Stmt::Assign(v) => v.as_source(self.indent).fmt(f),
             Stmt::CtrlIf(v) => v.as_source(self.indent).fmt(f),
             Stmt::Expr(v) => v.as_source(self.indent).fmt(f),
+            _ => Ok(()),
         }
     }
 }

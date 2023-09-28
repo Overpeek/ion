@@ -310,7 +310,6 @@ dependencies = [
  "logos",
  "once_cell",
  "owo-colors",
- "rand",
  "serde",
  "serde_yaml",
  "thiserror",
@@ -332,6 +331,7 @@ name = "ion-repl"
 version = "0.1.0"
 dependencies = [
  "ion",
+ "rand",
  "tracing-subscriber",
 ]
 
