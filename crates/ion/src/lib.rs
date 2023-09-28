@@ -217,7 +217,7 @@ impl State {
         Self {
             module_parser: ModuleParser::new(),
             chunk_parser: ChunkParser::new(),
-            engine: Engine::default(),
+            engine: Engine::new(OptLevel::default(), true),
 
             src: RefCell::new(Module {
                 src_files: vec![],
@@ -231,8 +231,17 @@ impl State {
         self
     }
 
+    pub fn with_inlining(mut self, enable_inlining: bool) -> Self {
+        self.set_inlining(enable_inlining);
+        self
+    }
+
     pub fn set_opt_level(&mut self, opt_level: OptLevel) {
         self.engine.set_opt_level(opt_level);
+    }
+
+    pub fn set_inlining(&mut self, enable_inlining: bool) {
+        self.engine.set_inlining(enable_inlining);
     }
 
     pub fn add<C, F>(&self, base_name: &str, func: C)

@@ -56,6 +56,7 @@ pub struct Engine {
     module: llvm::Module<'static>,
 
     opt_level: OptLevel,
+    enable_inlining: bool,
     mpm: llvm::PassManager<llvm::Module<'static>>,
     fpm: llvm::PassManager<llvm::FunctionValue<'static>>,
     ee: OnceCell<llvm::ExecutionEngine<'static>>,
@@ -65,17 +66,18 @@ pub struct Engine {
 }
 
 impl Engine {
-    pub fn new(opt_level: OptLevel) -> Self {
+    pub fn new(opt_level: OptLevel, enable_inlining: bool) -> Self {
         let ctx = get_ctx();
         let module = ctx.create_module("<src>");
 
-        let (mpm, fpm) = Self::gen_pm(&module, opt_level);
+        let (mpm, fpm) = Self::gen_pm(&module, opt_level, enable_inlining);
         let ee = OnceCell::new();
 
         Self {
             module,
 
             opt_level,
+            enable_inlining,
             mpm,
             fpm,
             ee,
@@ -87,19 +89,25 @@ impl Engine {
 
     pub fn set_opt_level(&mut self, opt_level: OptLevel) {
         self.opt_level = opt_level;
-        (self.mpm, self.fpm) = Self::gen_pm(&self.module, opt_level);
+        (self.mpm, self.fpm) = Self::gen_pm(&self.module, opt_level, self.enable_inlining);
+    }
+
+    pub fn set_inlining(&mut self, enable_inlining: bool) {
+        self.enable_inlining = enable_inlining;
+        (self.mpm, self.fpm) = Self::gen_pm(&self.module, self.opt_level, enable_inlining);
     }
 
     fn gen_pm(
         module: &llvm::Module<'static>,
         opt_level: OptLevel,
+        enable_inlining: bool,
     ) -> (
         llvm::PassManager<llvm::Module<'static>>,
         llvm::PassManager<llvm::FunctionValue<'static>>,
     ) {
         let fpmb = llvm::PassManagerBuilder::create();
         fpmb.set_optimization_level(opt_level.llvm_opt_level());
-        fpmb.set_inliner_with_threshold(1024);
+        fpmb.set_inliner_with_threshold(if enable_inlining { 1024 } else { 0 });
 
         // let lpm = llvm::PassManager::create(&());
         let mpm = llvm::PassManager::create(&());
@@ -592,12 +600,6 @@ impl Engine {
             Type::Bool => ctx.bool_type().into(),
             Type::None => ctx.struct_type(&[], false).into(),
         }
-    }
-}
-
-impl Default for Engine {
-    fn default() -> Self {
-        Self::new(OptLevel::default())
     }
 }
 
