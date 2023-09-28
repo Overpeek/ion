@@ -378,8 +378,8 @@ impl Engine {
         // assert_ne!(from.get_type(), to.get_type());
 
         let cmp = match ctrlfor.range.kind {
-            RangeKind::Closed => BinOp::Lt,
-            RangeKind::Open => BinOp::Le,
+            RangeKind::Closed => BinOp::Le,
+            RangeKind::Open => BinOp::Lt,
         };
 
         let ctx = get_ctx();
