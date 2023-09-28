@@ -329,27 +329,20 @@ impl Engine {
         id: &str,
         val: llvm::BasicValueEnum<'static>,
         op: AssignOp,
-        scope: &mut Scope,
+        scope: &Scope,
     ) -> llvm::PointerValue<'static> {
         let (ty, ptr) = scope.get(id);
         assert_eq!(val.get_type(), ty);
 
-        let val = 'op: {
-            let op = match op {
-                AssignOp::Assign => {
-                    break 'op val;
-                }
-                AssignOp::Add => BinOp::Add,
-                AssignOp::Sub => BinOp::Sub,
-                AssignOp::Mul => BinOp::Mul,
-                AssignOp::Div => BinOp::Div,
-            };
-
+        let val = if let Some(op) = op.as_binop() {
             let target = scope.builder.build_load(ty, ptr, "tmp-assign-load");
             self.load_binexpr(target, val, op, scope)
+        } else {
+            val
         };
 
         scope.builder.build_store(ptr, val);
+
         ptr
     }
 
@@ -507,10 +500,6 @@ impl Engine {
 
         let b = &scope.builder;
 
-        fn conv<V: llvm::BasicValue<'static>>(v: V) -> llvm::BasicValueEnum<'static> {
-            v.as_basic_value_enum()
-        }
-
         fn bin_op_as_int_predicate(op: BinOp) -> Option<Ip> {
             match op {
                 BinOp::Lt => Some(Ip::SLT),
@@ -523,12 +512,18 @@ impl Engine {
         }
 
         match (lhs, rhs, op, bin_op_as_int_predicate(op)) {
-            (I(l), I(r), BinOp::Add, _) => conv(b.build_int_add(l, r, "int-add")),
-            (I(l), I(r), BinOp::Sub, _) => conv(b.build_int_sub(l, r, "int-sub")),
-            (I(l), I(r), BinOp::Mul, _) => conv(b.build_int_mul(l, r, "int-mul")),
-            (I(l), I(r), BinOp::Div, _) => conv(b.build_int_signed_div(l, r, "int-div")),
+            (I(l), I(r), BinOp::Add, _) => b.build_int_add(l, r, "int-add").into(),
+            (I(l), I(r), BinOp::Sub, _) => b.build_int_sub(l, r, "int-sub").into(),
+            (I(l), I(r), BinOp::Mul, _) => b.build_int_mul(l, r, "int-mul").into(),
+            (I(l), I(r), BinOp::Div, _) => b.build_int_signed_div(l, r, "int-div").into(),
+            (I(_l), I(_r), BinOp::Mod, _) => {
+                // round `lhs` to `rhs`
+                let div = self.load_binexpr(lhs, rhs, BinOp::Div, scope);
+                let rounded = self.load_binexpr(div, rhs, BinOp::Mul, scope);
+                self.load_binexpr(lhs, rounded, BinOp::Sub, scope)
+            }
 
-            (I(l), I(r), _, Some(cmp)) => conv(b.build_int_compare(cmp, l, r, "int-cmp")),
+            (I(l), I(r), _, Some(cmp)) => b.build_int_compare(cmp, l, r, "int-cmp").into(),
 
             (lhs, rhs, op, _) => {
                 let (lhs, rhs) = (lhs.get_type(), rhs.get_type());

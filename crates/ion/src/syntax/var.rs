@@ -4,7 +4,7 @@ use arcstr::Substr;
 
 use crate::util::{PrintSource, Source};
 
-use super::Expr;
+use super::{BinOp, Expr};
 
 //
 
@@ -46,6 +46,20 @@ pub enum AssignOp {
     Sub,
     Mul,
     Div,
+    Mod,
+}
+
+impl AssignOp {
+    pub const fn as_binop(self) -> Option<BinOp> {
+        match self {
+            Self::Assign => None,
+            Self::Add => Some(BinOp::Add),
+            Self::Sub => Some(BinOp::Sub),
+            Self::Mul => Some(BinOp::Mul),
+            Self::Div => Some(BinOp::Div),
+            Self::Mod => Some(BinOp::Mod),
+        }
+    }
 }
 
 impl fmt::Display for AssignOp {
@@ -59,6 +73,7 @@ impl fmt::Display for AssignOp {
                 AssignOp::Sub => "-=",
                 AssignOp::Mul => "*=",
                 AssignOp::Div => "/=",
+                AssignOp::Mod => "%=",
             }
         )
     }

@@ -92,6 +92,8 @@ pub enum Token {
     OpMul,
     #[token("/")]
     OpDiv,
+    #[token("%")]
+    OpMod,
     #[token("<")]
     OpLt,
     #[token("<=")]
@@ -111,13 +113,15 @@ pub enum Token {
     #[token("=")]
     Assign,
     #[token("+=")]
-    AddAssign,
+    AssignAdd,
     #[token("-=")]
-    SubAssign,
+    AssignSub,
     #[token("*=")]
-    MulAssign,
+    AssignMul,
     #[token("/=")]
-    DivAssign,
+    AssignDiv,
+    #[token("%=")]
+    AssignMod,
 }
 
 impl fmt::Display for Token {

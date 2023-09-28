@@ -226,20 +226,28 @@ impl State {
         }
     }
 
+    /// set optimizer level
+    ///
+    /// affects both the execution engine optimizer level and the pass manager optimizer level
+    ///
+    /// the execution engine optimizer level is locked after the first run
     pub fn with_opt_level(mut self, opt_level: OptLevel) -> Self {
         self.set_opt_level(opt_level);
         self
     }
 
+    /// enable or disable function call inlining, disabling inlining is useful for IR debugging
     pub fn with_inlining(mut self, enable_inlining: bool) -> Self {
         self.set_inlining(enable_inlining);
         self
     }
 
+    /// see [`Self::with_opt_level`]
     pub fn set_opt_level(&mut self, opt_level: OptLevel) {
         self.engine.set_opt_level(opt_level);
     }
 
+    /// see [`Self::with_inlining`]
     pub fn set_inlining(&mut self, enable_inlining: bool) {
         self.engine.set_inlining(enable_inlining);
     }

@@ -9,9 +9,9 @@ fn main() {
     tracing_subscriber::fmt::init();
 
     let src = r#"
-        for i in 1..=4 {
-            for j in 1..=4 {
-                print(i * j);
+        for i in 1..=100 {
+            if i % 2 == 0 {
+                print(i);
             }
         }
     "#;
@@ -25,11 +25,12 @@ fn main() {
     let mut rng = rand::thread_rng();
     state.add("rand", move || rng.gen_ratio(1, 2));
     state.add("print", |v: i32| println!("{v}"));
+    state.add("add", |l: i32, r: i32| l + r);
 
     state.run(src).unwrap_or_else(|err| {
         eprintln!("{}", err.pretty_print(true, src, "<src>"));
         exit(1)
     });
 
-    println!("\n==[[ IR  ]]==\n{}\n==[[ END ]]==", state.dump_ir());
+    // println!("\n==[[ IR  ]]==\n{}\n==[[ END ]]==", state.dump_ir());
 }

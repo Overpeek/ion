@@ -43,6 +43,7 @@ pub enum BinOp {
     Sub,
     Mul,
     Div,
+    Mod,
 
     Lt,
     Le,
@@ -58,6 +59,7 @@ impl BinOp {
             BinOp::Sub => "-",
             BinOp::Mul => "*",
             BinOp::Div => "/",
+            BinOp::Mod => "%",
             BinOp::Lt => "<",
             BinOp::Le => "<=",
             BinOp::Eq => "==",

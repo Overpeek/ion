@@ -45,6 +45,7 @@ extern {
         "-" => Token::OpSub,
         "*" => Token::OpMul,
         "/" => Token::OpDiv,
+        "%" => Token::OpMod,
         "<" => Token::OpLt,
         "<=" => Token::OpLe,
         "==" => Token::OpEq,
@@ -52,10 +53,11 @@ extern {
         ">" => Token::OpGt,
 
         "=" => Token::Assign,
-        "+=" => Token::AddAssign,
-        "-=" => Token::SubAssign,
-        "*=" => Token::MulAssign,
-        "/=" => Token::DivAssign,
+        "+=" => Token::AssignAdd,
+        "-=" => Token::AssignSub,
+        "*=" => Token::AssignMul,
+        "/=" => Token::AssignDiv,
+        "%=" => Token::AssignMod,
     }
 }
 
@@ -158,6 +160,7 @@ pub AssignOp: AssignOp = {
     "-=" => AssignOp::Sub,
     "*=" => AssignOp::Mul,
     "/=" => AssignOp::Div,
+    "%=" => AssignOp::Mod,
 };
 
 pub CtrlIf: CtrlIf = {
@@ -220,6 +223,7 @@ pub Expr: Expr = {
 ProdOp: BinOp = {
     "*" => BinOp::Mul,
     "/" => BinOp::Div,
+    "%" => BinOp::Mod,
 };
 
 TermOp: BinOp = {
