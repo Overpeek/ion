@@ -6,8 +6,8 @@ use once_cell::unsync::{Lazy, OnceCell};
 
 use crate::{
     syntax::{
-        Assign, AssignOp, BinOp, Block, CtrlIf, Expr, FnCall, FnCallExt, FnDef, FnProto, Item, Let,
-        Module, Param, ParamList, Return, Stmt, Type, Value,
+        Assign, AssignOp, BinOp, Block, CtrlFor, CtrlIf, Expr, FnCall, FnCallExt, FnDef, FnProto,
+        Item, Let, Module, Param, ParamList, RangeKind, Return, Stmt, Type, Value,
     },
     IonCallback, OptLevel,
 };
@@ -273,13 +273,13 @@ impl Engine {
     pub fn load_stmt(&self, stmt: &Stmt, scope: &mut Scope) {
         match stmt {
             Stmt::Return(ret) => self.load_return(ret, scope),
-            Stmt::Let(r#let) => self.load_let(r#let, scope),
-            Stmt::Assign(assign) => self.load_assign(assign, scope),
+            Stmt::Let(r#let) => _ = self.load_let(r#let, scope),
+            Stmt::Assign(assign) => _ = self.load_assign(assign, scope),
             Stmt::CtrlIf(ctrlif) => self.load_ctrlif(ctrlif, scope),
+            Stmt::CtrlFor(ctrlfor) => self.load_ctrlfor(ctrlfor, scope),
             Stmt::Expr(expr) => _ = self.load_expr(expr, scope),
-            Stmt::Semi => {}
-            /* Stmt::FnCall(fncall) => _ = self.load_fncall(fncall, scope),
-            Stmt::FnCallExt(fncallext) => _ = self.load_fncallext(fncallext, scope), */
+            Stmt::Semi => {} /* Stmt::FnCall(fncall) => _ = self.load_fncall(fncall, scope),
+                             Stmt::FnCallExt(fncallext) => _ = self.load_fncallext(fncallext, scope), */
         }
     }
 
@@ -290,24 +290,44 @@ impl Engine {
         scope.builder.build_return(val);
     }
 
-    pub fn load_let(&self, r#let: &Let, scope: &mut Scope) {
+    pub fn load_let(&self, r#let: &Let, scope: &mut Scope) -> llvm::PointerValue<'static> {
         let val = self.load_expr(&r#let.expr, scope);
-
-        let ty = val.get_type();
-        let ptr = self.entry_var_alloca(&r#let.id, ty, scope);
-        scope.builder.build_store(ptr, val);
-
-        scope.set(r#let.id.clone(), (ty, ptr));
+        self.load_let_raw(r#let.id.clone(), val, scope)
     }
 
-    pub fn load_assign(&self, assign: &Assign, scope: &mut Scope) {
-        let val = self.load_expr(&assign.expr, scope);
+    fn load_let_raw(
+        &self,
+        id: Substr,
+        val: llvm::BasicValueEnum<'static>,
+        scope: &mut Scope,
+    ) -> llvm::PointerValue<'static> {
+        let ty = val.get_type();
+        // stack alloc for the variable
+        let ptr = self.entry_var_alloca(&id, ty, scope);
+        // save `val` to the alloc
+        scope.builder.build_store(ptr, val);
+        // save the variable handle
+        scope.set(id, (ty, ptr));
+        ptr
+    }
 
-        let (ty, ptr) = scope.get(&assign.id);
+    pub fn load_assign(&self, assign: &Assign, scope: &mut Scope) -> llvm::PointerValue<'static> {
+        let val = self.load_expr(&assign.expr, scope);
+        self.load_assign_raw(&assign.id, val, assign.op, scope)
+    }
+
+    fn load_assign_raw(
+        &self,
+        id: &str,
+        val: llvm::BasicValueEnum<'static>,
+        op: AssignOp,
+        scope: &mut Scope,
+    ) -> llvm::PointerValue<'static> {
+        let (ty, ptr) = scope.get(id);
         assert_eq!(val.get_type(), ty);
 
         let val = 'op: {
-            let op = match assign.op {
+            let op = match op {
                 AssignOp::Assign => {
                     break 'op val;
                 }
@@ -322,6 +342,7 @@ impl Engine {
         };
 
         scope.builder.build_store(ptr, val);
+        ptr
     }
 
     pub fn load_ctrlif(&self, ctrlif: &CtrlIf, scope: &mut Scope) {
@@ -348,6 +369,60 @@ impl Engine {
 
         // if_continue block
         scope.builder.position_at_end(if_continue);
+    }
+
+    pub fn load_ctrlfor(&self, ctrlfor: &CtrlFor, scope: &mut Scope) {
+        let from = self.load_expr(&ctrlfor.range.range.0, scope);
+        let to = self.load_expr(&ctrlfor.range.range.1, scope);
+
+        // assert_ne!(from.get_type(), to.get_type());
+
+        let cmp = match ctrlfor.range.kind {
+            RangeKind::Closed => BinOp::Lt,
+            RangeKind::Open => BinOp::Le,
+        };
+
+        let ctx = get_ctx();
+        let for_loop = ctx.append_basic_block(scope.proto, "for-loop");
+        let for_block = ctx.append_basic_block(scope.proto, "for-block");
+        let for_continue = ctx.append_basic_block(scope.proto, "for-continue");
+
+        // for (***int i = 0***; i<10; i++) {}
+        // it obv doesn't have to be named `i`
+        self.load_let_raw(ctrlfor.id.clone(), from, scope);
+        // jump to the loop
+        scope.builder.build_unconditional_branch(for_loop);
+
+        // for-loop block
+        scope.builder.position_at_end(for_loop);
+
+        // for (int i = 0; ***i<10***; i++) {}
+        let i_now = self.load_variable(&ctrlfor.id, scope);
+        let cmp = self.load_binexpr(i_now, to, cmp, scope);
+        let BasicValueEnum::IntValue(cmp) = cmp else {
+            panic!("invalid for-if condition");
+        };
+        scope
+            .builder
+            .build_conditional_branch(cmp, for_block, for_continue);
+
+        // for-block block
+        scope.builder.position_at_end(for_block);
+
+        // for (int i = 0; i<10; i++) ***{}***
+        self.load_block(&ctrlfor.block, scope);
+
+        // for (int i = 0; i<10; ******)
+        self.load_assign_raw(
+            &ctrlfor.id,
+            self.load_value(&Value::Int(1)),
+            AssignOp::Add,
+            scope,
+        );
+        scope.builder.build_unconditional_branch(for_loop);
+
+        // for-after block
+        scope.builder.position_at_end(for_continue);
     }
 
     pub fn load_fncall(&self, fncall: &FnCall, scope: &mut Scope) -> llvm::BasicValueEnum<'static> {
@@ -492,7 +567,17 @@ impl Engine {
         ty: llvm::BasicTypeEnum<'static>,
         scope: &Scope,
     ) -> llvm::PointerValue<'static> {
-        // TODO: reuse
+        let block = scope
+            .proto
+            .get_first_basic_block()
+            .expect("scope without a block");
+
+        if let Some(first) = block.get_first_instruction() {
+            scope.entry_builder.position_before(&first);
+        } else {
+            scope.entry_builder.position_at_end(block);
+        }
+
         scope
             .entry_builder
             .build_alloca(ty, /* Self::type_enum(ty) */ name)
@@ -586,12 +671,12 @@ impl Scope {
             .flat_map(|v| v.iter())
             .rev()
             .find(|var| var.id == id)
-            .expect("variable not found")
+            .unwrap_or_else(|| panic!("variable `{id}` not found"))
             .val
     }
 
     fn last_mut(&mut self) -> &mut Vec<Var> {
-        if self.vars.len() == 0 {
+        if self.vars.is_empty() {
             self.vars.push(vec![]);
         }
 

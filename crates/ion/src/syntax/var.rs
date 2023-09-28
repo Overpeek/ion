@@ -39,7 +39,7 @@ impl fmt::Display for Source<'_, Assign> {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Copy)]
 pub enum AssignOp {
     Assign,
     Add,

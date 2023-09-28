@@ -12,7 +12,10 @@ extern {
         "fn" => Token::KeywordFn,
         "let" => Token::KeywordLet,
         "if" => Token::KeywordIf,
+        "for" => Token::KeywordFor,
+        "in" => Token::KeywordIn,
         "return" => Token::KeywordReturn,
+
         "i32" => Token::KeywordInt,
         "f32" => Token::KeywordFloat,
         "bool" => Token::KeywordBool,
@@ -34,6 +37,9 @@ extern {
         "," => Token::Comma,
         ";" => Token::Semi,
         ":" => Token::Colon,
+
+        ".." => Token::RangeOpen,
+        "..=" => Token::RangeClosed,
 
         "+" => Token::OpAdd,
         "-" => Token::OpSub,
@@ -124,6 +130,7 @@ SemiStmt: Stmt = {
 
 NoSemiStmt: Stmt = {
     CtrlIf => Stmt::CtrlIf(<>),
+    CtrlFor => Stmt::CtrlFor(<>),
 };
 
 pub Return: Return = {
@@ -160,14 +167,25 @@ pub CtrlIf: CtrlIf = {
     },
 };
 
-// pub Expr: Expr = {
-//    #[precedence(level = "1")]
-//    Exprk,
-// 
-//    #[precedence(level = "2")]
-//    #[assoc(side = "left")]
-//    FnCall => Expr::FnCall(<>),
-// };
+pub CtrlFor: CtrlFor = {
+    "for" <id:"ident"> "in" <range:Range> <block:Block> => CtrlFor {
+        id,
+        range,
+        block,
+    },
+};
+
+pub Range: Range = {
+    <from:Expr> <kind:RangeKind> <to:Expr> => Range {
+        range: Box::new((from, to)),
+        kind,
+    },
+};
+
+pub RangeKind: RangeKind = {
+    ".." => RangeKind::Open,
+    "..=" => RangeKind::Closed,
+};
 
 pub Expr: Expr = {
     #[precedence(level = "1")]
@@ -187,17 +205,16 @@ pub Expr: Expr = {
         op,
     },
 
-    // #[precedence(level = "4")]
-    // #[assoc(side = "left")]
-    // <lhs:Expr> <op:CmpOp> <rhs:Expr> => Expr::BinExpr {
-    //     sides: Box::new((lhs, rhs)),
-    //     op,
-    // },
-
-
-    #[precedence(level = "5")]
+    #[precedence(level = "4")]
     #[assoc(side = "right")]
     FnCall => Expr::FnCall(<>),
+
+    #[precedence(level = "5")]
+    #[assoc(side = "left")]
+    <lhs:Expr> <op:CmpOp> <rhs:Expr> => Expr::BinExpr {
+        sides: Box::new((lhs, rhs)),
+        op,
+    },
 };
 
 ProdOp: BinOp = {

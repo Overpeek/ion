@@ -32,10 +32,15 @@ pub enum Token {
     KeywordFn,
     #[token("let")]
     KeywordLet,
-    #[token("return")]
-    KeywordReturn,
     #[token("if")]
     KeywordIf,
+    #[token("for")]
+    KeywordFor,
+    #[token("in")]
+    KeywordIn,
+    #[token("return")]
+    KeywordReturn,
+
     #[token("i32")]
     KeywordInt,
     #[token("f32")]
@@ -52,7 +57,8 @@ pub enum Token {
 
     #[regex(r"\d+", lex_int)]
     Int(i64),
-    #[regex(r"(\d+\.\d*)|(\d*\.\d+)", lex_float)]
+    // #[regex(r"(\d+\.\d*)|(\d*\.\d+)", lex_float)]
+    #[regex(r"\d+\.\d+", lex_float)]
     Float(f64),
     #[regex(r#"(true)|(false)"#, lex_bool)]
     Bool(bool),
@@ -96,6 +102,11 @@ pub enum Token {
     OpGe,
     #[token(">")]
     OpGt,
+
+    #[token("..")]
+    RangeOpen,
+    #[token("..=")]
+    RangeClosed,
 
     #[token("=")]
     Assign,

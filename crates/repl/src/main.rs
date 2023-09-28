@@ -9,11 +9,9 @@ fn main() {
     tracing_subscriber::fmt::init();
 
     let src = r#"
-        if rand() {
-            print(42);
+        for i in 0..10 {
+            print(i * i);
         }
-
-        // for i in 0..10 {}
     "#;
 
     let lvl = OptLevel::High;
