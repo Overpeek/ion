@@ -1,4 +1,4 @@
-use crate::syntax::{*, lexer::Token};
+use crate::{syntax::{*, lexer::Token}, Type};
 
 //
 
@@ -101,8 +101,10 @@ pub Param: Param = {
 };
 
 pub Type: Type = {
+    "str" => Type::Str,
     "i32" => Type::I32,
     "f32" => Type::F32,
+    "bool" => Type::Bool,
     "none" => Type::None,
 };
 
@@ -246,6 +248,7 @@ pub Term: Expr = {
 };
 
 pub Value: Value = {
+    "lit_str" => Value::Str(<>),
     "lit_int" => Value::Int(<>),
     "lit_float" => Value::Float(<>),
     "lit_bool" => Value::Bool(<>),

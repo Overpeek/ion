@@ -2,7 +2,10 @@ use std::fmt;
 
 use arcstr::Substr;
 
-use crate::util::{IterDisplay, Padding, PrintSource, Source};
+use crate::{
+    util::{IterDisplay, Padding, PrintSource, Source},
+    Type,
+};
 
 use super::{Block, Expr};
 
@@ -79,40 +82,6 @@ impl fmt::Display for Source<'_, Param> {
         let ty = ty.as_source(self.indent);
 
         write!(f, "{id}: {ty}")
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-#[repr(C)]
-pub enum Type {
-    U64,
-    I32,
-    F32,
-    Bool,
-    None,
-}
-
-impl Type {
-    pub const fn as_str(&self) -> &'static str {
-        match self {
-            Type::U64 => "u64",
-            Type::I32 => "i32",
-            Type::F32 => "f32",
-            Type::Bool => "bool",
-            Type::None => "none",
-        }
-    }
-}
-
-impl fmt::Display for Source<'_, Type> {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self.inner {
-            Type::U64 => write!(f, "u64"),
-            Type::I32 => write!(f, "i32"),
-            Type::F32 => write!(f, "f32"),
-            Type::Bool => write!(f, "bool"),
-            Type::None => write!(f, "none"),
-        }
     }
 }
 

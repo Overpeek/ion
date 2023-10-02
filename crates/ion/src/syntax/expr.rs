@@ -81,8 +81,9 @@ impl fmt::Display for BinOp {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum Value {
+    Str(Substr),
     Int(i64),
     Float(f64),
     Bool(bool),
@@ -91,6 +92,7 @@ pub enum Value {
 impl fmt::Display for Source<'_, Value> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self.inner {
+            Value::Str(v) => write!(f, "\"{v}\""),
             Value::Int(v) => write!(f, "{v}"),
             Value::Float(v) => write!(f, "{v}"),
             Value::Bool(v) => write!(f, "{v}"),
